@@ -1,0 +1,4 @@
+dist/
+node_modules/
+*.shell-extension.zip
+.DS_Store

@@ -1,0 +1,39 @@
+.cuotax-box {
+  spacing: 4px;
+}
+
+.cuotax-label {
+  min-width: 2.5em;
+}
+
+.cuotax-icon {
+  width: 16px;
+  height: 16px;
+  color: #57e389;
+}
+
+.cuotax-icon-warning {
+  color: #f6d32d;
+}
+
+.cuotax-icon-critical {
+  color: #f66151;
+}
+
+.cuotax-icon-unavailable {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.cuotax-warning .cuotax-label {
+  color: #f6d32d;
+}
+
+.cuotax-critical .cuotax-label,
+.cuotax-error {
+  color: #f66151;
+}
+
+.cuotax-diagnostic {
+  opacity: 0.7;
+  font-size: 0.9em;
+}

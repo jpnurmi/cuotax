@@ -1,0 +1,7 @@
+{
+  "uuid": "cuotax@jpnurmi.github.com",
+  "name": "CuotaX",
+  "description": "Codex quota in the GNOME top panel",
+  "shell-version": ["50"],
+  "version": 1
+}
