@@ -129,7 +129,7 @@ export function paceColor(status) {
     if (typeof status.coverage !== 'number' || Number.isNaN(status.coverage)) return null;
 
     const coverage = Math.min(1, Math.max(0, status.coverage));
-    const hue = 120 * coverage ** 2;
+    const hue = 120 * (1 - Math.sqrt(1 - coverage));
     const saturation = 0.75;
     const lightness = 0.55;
     const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;

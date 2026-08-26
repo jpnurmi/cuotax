@@ -60,6 +60,8 @@ assertEqual(status.window, '5-hour');
 assertEqual(paceLabel(status), 'On track');
 let color = paceColor(status);
 assertEqual(color.green > color.red, true);
+color = paceColor({coverage: 0.75, level: 'warning'});
+assertEqual(color.red, color.green);
 status = quotaStatus(
     {fiveHour: {usedPercent: 60, resetsAt: statusNow + 240 * 60 * 1000}},
     statusNow,
