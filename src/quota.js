@@ -90,7 +90,9 @@ function windowStatus(value, window, durationMinutes, now) {
     const timeRemaining = Math.min(1, Math.max(0, (value.resetsAt - now) / duration));
     const onTrackPercent = Math.round(1000 * (1 - timeRemaining)) / 10;
     const coverage = timeRemaining === 0 ? Infinity : remainingPercent / 100 / timeRemaining;
-    const level = coverage < 0.5 ? 'critical' : coverage < 1 ? 'warning' : 'normal';
+    const usedPercent = Math.round(displayPercent(value.usedPercent) * 10) / 10;
+    const level =
+        usedPercent <= onTrackPercent ? 'normal' : coverage < 0.5 ? 'critical' : 'warning';
     return {coverage, level, onTrackPercent, remainingPercent, window};
 }
 

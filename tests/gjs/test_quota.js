@@ -65,6 +65,17 @@ assertEqual(status.level, 'warning');
 assertEqual(status.onTrackPercent, 20);
 assertEqual(paceLabel(status), 'Running high');
 status = quotaStatus(
+    {fiveHour: {usedPercent: 12, resetsAt: statusNow + 264.12 * 60 * 1000}},
+    statusNow,
+);
+assertEqual(status.onTrackPercent, 12);
+assertEqual(status.level, 'normal');
+status = quotaStatus(
+    {fiveHour: {usedPercent: 12.1, resetsAt: statusNow + 264.12 * 60 * 1000}},
+    statusNow,
+);
+assertEqual(status.level, 'warning');
+status = quotaStatus(
     {fiveHour: {usedPercent: 80, resetsAt: statusNow + 240 * 60 * 1000}},
     statusNow,
 );
