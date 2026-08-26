@@ -56,8 +56,9 @@ const QuotaIcon = GObject.registerClass(
 
         _repaint() {
             const [width, height] = this.get_surface_size();
-            const color = this._color ?? this.get_theme_node().get_foreground_color();
-            const alpha = color.alpha / 255;
+            const themeColor = this.get_theme_node().get_foreground_color();
+            const color = this._color ?? themeColor;
+            const alpha = themeColor.alpha / 255;
             const cr = this.get_context();
             const size = Math.min(width, height);
             const scale = size / 16;

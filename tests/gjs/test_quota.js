@@ -115,6 +115,7 @@ assertEqual(status.level, 'unavailable');
 assertEqual(status.onTrackPercent, null);
 assertEqual(paceLabel(status), 'Pace unavailable');
 assertEqual(paceColor(status), null);
+assertEqual(paceColor({coverage: 1, level: 'unavailable'}), null);
 
 const weeklyOnly = parseQuota({
     rateLimits: {

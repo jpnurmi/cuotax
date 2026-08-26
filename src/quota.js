@@ -125,6 +125,7 @@ export function quotaStatus(quota, now = Date.now()) {
 }
 
 export function paceColor(status) {
+    if (status.level === 'unavailable') return null;
     if (typeof status.coverage !== 'number' || Number.isNaN(status.coverage)) return null;
 
     const coverage = Math.min(1, Math.max(0, status.coverage));
