@@ -72,7 +72,7 @@ export function formatReset(value) {
     return `resets ${formatted} ${formatTime(value)}`;
 }
 
-function windowStatus(value, durationMinutes, now) {
+function windowStatus(value, window, durationMinutes, now) {
     if (!value) return null;
 
     const remainingPercent = 100 - displayPercent(value.usedPercent);
@@ -80,28 +80,44 @@ function windowStatus(value, durationMinutes, now) {
         return {
             coverage: remainingPercent / 100,
             level: severity(value.usedPercent),
+            onTrackPercent: null,
             remainingPercent,
+            window,
         };
     }
 
     const duration = durationMinutes * 60 * 1000;
     const timeRemaining = Math.min(1, Math.max(0, (value.resetsAt - now) / duration));
+    const onTrackPercent = Math.round(1000 * (1 - timeRemaining)) / 10;
     const coverage = timeRemaining === 0 ? Infinity : remainingPercent / 100 / timeRemaining;
     const level = coverage < 0.5 ? 'critical' : coverage < 1 ? 'warning' : 'normal';
-    return {coverage, level, remainingPercent};
+    return {coverage, level, onTrackPercent, remainingPercent, window};
 }
 
 export function quotaStatus(quota, now = Date.now()) {
     const statuses = [
-        windowStatus(quota?.fiveHour, FIVE_HOURS_MINUTES, now),
-        windowStatus(quota?.weekly, WEEK_MINUTES, now),
+        windowStatus(quota?.fiveHour, '5-hour', FIVE_HOURS_MINUTES, now),
+        windowStatus(quota?.weekly, 'weekly', WEEK_MINUTES, now),
     ].filter(Boolean);
-    if (statuses.length === 0) return {level: 'unavailable', remainingPercent: null};
+    if (statuses.length === 0)
+        return {level: 'unavailable', onTrackPercent: null, remainingPercent: null, window: null};
 
     const status = statuses.reduce((lowest, current) =>
         current.coverage < lowest.coverage ? current : lowest,
     );
-    return {level: status.level, remainingPercent: status.remainingPercent};
+    return {
+        level: status.level,
+        onTrackPercent: status.onTrackPercent,
+        remainingPercent: status.remainingPercent,
+        window: status.window,
+    };
+}
+
+export function paceLabel(status) {
+    if (status.level === 'normal') return 'On track';
+    if (status.level === 'warning') return 'Running high';
+    if (status.level === 'critical') return 'At risk';
+    return 'Pace unavailable';
 }
 
 export function severity(value) {

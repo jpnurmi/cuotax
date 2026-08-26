@@ -24,6 +24,26 @@
   color: rgba(255, 255, 255, 0.55);
 }
 
+.cuotax-pace-icon {
+  icon-size: 8px;
+}
+
+.cuotax-pace-normal {
+  color: #57e389;
+}
+
+.cuotax-pace-warning {
+  color: #f6d32d;
+}
+
+.cuotax-pace-critical {
+  color: #f66151;
+}
+
+.cuotax-pace-unavailable {
+  color: rgba(255, 255, 255, 0.55);
+}
+
 .cuotax-warning .cuotax-label {
   color: #f6d32d;
 }

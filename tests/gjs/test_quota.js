@@ -4,6 +4,7 @@ import {
     formatReset,
     formatTime,
     highestPercent,
+    paceLabel,
     parseQuota,
     quotaStatus,
     severity,
@@ -52,17 +53,23 @@ let status = quotaStatus(
     statusNow,
 );
 assertEqual(status.level, 'normal');
+assertEqual(status.onTrackPercent, 50);
 assertEqual(status.remainingPercent, 75);
+assertEqual(status.window, '5-hour');
+assertEqual(paceLabel(status), 'On track');
 status = quotaStatus(
     {fiveHour: {usedPercent: 60, resetsAt: statusNow + 240 * 60 * 1000}},
     statusNow,
 );
 assertEqual(status.level, 'warning');
+assertEqual(status.onTrackPercent, 20);
+assertEqual(paceLabel(status), 'Running high');
 status = quotaStatus(
     {fiveHour: {usedPercent: 80, resetsAt: statusNow + 240 * 60 * 1000}},
     statusNow,
 );
 assertEqual(status.level, 'critical');
+assertEqual(paceLabel(status), 'At risk');
 status = quotaStatus(
     {weekly: {usedPercent: 90, resetsAt: statusNow + 6 * 24 * 60 * 60 * 1000}},
     statusNow,
@@ -70,7 +77,12 @@ status = quotaStatus(
 assertEqual(status.level, 'critical');
 status = quotaStatus({weekly: {usedPercent: 90, resetsAt: statusNow + 60 * 60 * 1000}}, statusNow);
 assertEqual(status.level, 'normal');
-assertEqual(quotaStatus(null, statusNow).level, 'unavailable');
+assertEqual(status.window, 'weekly');
+assertEqual(Math.round(status.onTrackPercent * 10) / 10, 99.4);
+status = quotaStatus(null, statusNow);
+assertEqual(status.level, 'unavailable');
+assertEqual(status.onTrackPercent, null);
+assertEqual(paceLabel(status), 'Pace unavailable');
 
 const weeklyOnly = parseQuota({
     rateLimits: {

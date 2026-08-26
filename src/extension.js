@@ -17,6 +17,7 @@ import {
     formatReset,
     formatTime,
     highestPercent,
+    paceLabel,
     quotaStatus,
 } from './quota.js';
 
@@ -124,12 +125,13 @@ const CuotaXIndicator = GObject.registerClass(
             const displayed = displayPercent(percent);
             const status = quotaStatus(quota);
             const level = status.level;
+            const pace = paceLabel(status);
             this._icon.render(status);
             this._label.text = displayed === null ? '—' : `${Math.round(displayed)}%`;
             this.set_accessible_name(
                 displayed === null
                     ? 'CuotaX unavailable'
-                    : `CuotaX ${Math.round(displayed)} percent`,
+                    : `CuotaX ${Math.round(displayed)} percent, ${pace.toLowerCase()}`,
             );
 
             this.remove_style_class_name('cuotax-warning');
@@ -138,8 +140,8 @@ const CuotaXIndicator = GObject.registerClass(
             else if (level === 'critical') this.add_style_class_name('cuotax-critical');
 
             this.menu.removeAll();
-            this.menu.addMenuItem(this._quotaItem('5-hour', quota.fiveHour));
-            this.menu.addMenuItem(this._quotaItem('Weekly', quota.weekly));
+            this.menu.addMenuItem(this._quotaItem('5-hour', quota.fiveHour, 'fiveHour'));
+            this.menu.addMenuItem(this._quotaItem('Weekly', quota.weekly, 'weekly'));
             if (error) {
                 this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
                 this.menu.addMenuItem(
@@ -162,11 +164,30 @@ const CuotaXIndicator = GObject.registerClass(
             this._addRefresh();
         }
 
-        _quotaItem(label, quota) {
-            if (!quota) return infoItem(`${label}  —`);
-            return infoItem(
-                `${label}  ${formatPercent(quota.usedPercent)} · ${formatReset(quota.resetsAt)}`,
+        _quotaItem(label, quota, window) {
+            const status = quotaStatus({[window]: quota});
+            const used = displayPercent(quota?.usedPercent);
+            const reference =
+                used === null || status.onTrackPercent === null
+                    ? ''
+                    : ` (${used <= status.onTrackPercent ? '≤' : '>'}${formatPercent(status.onTrackPercent)})`;
+            const text = quota
+                ? `${label}  ${formatPercent(used)}${reference} · ${formatReset(quota.resetsAt)}`
+                : `${label}  —`;
+            const item = infoItem(text);
+            item.set_accessible_name(
+                quota
+                    ? `${label}: ${formatPercent(quota.usedPercent)} used; ${formatPercent(status.onTrackPercent)} is on track`
+                    : `${label}: unavailable`,
             );
+            item.insert_child_at_index(
+                new St.Icon({
+                    icon_name: 'media-record-symbolic',
+                    style_class: `cuotax-pace-icon cuotax-pace-${status.level}`,
+                }),
+                0,
+            );
+            return item;
         }
 
         _addRefresh() {
