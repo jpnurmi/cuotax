@@ -4,6 +4,7 @@ import {
     formatReset,
     formatTime,
     highestPercent,
+    paceColor,
     paceLabel,
     parseQuota,
     quotaStatus,
@@ -57,6 +58,8 @@ assertEqual(status.onTrackPercent, 50);
 assertEqual(status.remainingPercent, 75);
 assertEqual(status.window, '5-hour');
 assertEqual(paceLabel(status), 'On track');
+let color = paceColor(status);
+assertEqual(color.green > color.red, true);
 status = quotaStatus(
     {fiveHour: {usedPercent: 60, resetsAt: statusNow + 240 * 60 * 1000}},
     statusNow,
@@ -64,6 +67,8 @@ status = quotaStatus(
 assertEqual(status.level, 'warning');
 assertEqual(status.onTrackPercent, 20);
 assertEqual(paceLabel(status), 'Running high');
+color = paceColor(status);
+assertEqual(color.red > color.green, true);
 status = quotaStatus(
     {fiveHour: {usedPercent: 12, resetsAt: statusNow + 264.12 * 60 * 1000}},
     statusNow,
@@ -81,6 +86,8 @@ status = quotaStatus(
 );
 assertEqual(status.level, 'critical');
 assertEqual(paceLabel(status), 'At risk');
+color = paceColor(status);
+assertEqual(color.red > color.green, true);
 status = quotaStatus(
     {weekly: {usedPercent: 90, resetsAt: statusNow + 6 * 24 * 60 * 60 * 1000}},
     statusNow,
@@ -107,6 +114,7 @@ status = quotaStatus(null, statusNow);
 assertEqual(status.level, 'unavailable');
 assertEqual(status.onTrackPercent, null);
 assertEqual(paceLabel(status), 'Pace unavailable');
+assertEqual(paceColor(status), null);
 
 const weeklyOnly = parseQuota({
     rateLimits: {

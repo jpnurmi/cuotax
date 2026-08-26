@@ -17,6 +17,7 @@ import {
     formatReset,
     formatTime,
     highestPercent,
+    paceColor,
     paceLabel,
     quotaStatus,
 } from './quota.js';
@@ -34,29 +35,29 @@ function infoItem(text, styleClass = '') {
     return item;
 }
 
+function colorStyle(color) {
+    return color ? `color: rgb(${color.red}, ${color.green}, ${color.blue});` : '';
+}
+
 const QuotaIcon = GObject.registerClass(
     class QuotaIcon extends St.DrawingArea {
         _init() {
             super._init({style_class: 'cuotax-icon'});
+            this._color = null;
             this._remainingPercent = null;
             this.connect('repaint', () => this._repaint());
         }
 
         render(status) {
+            this._color = paceColor(status);
             this._remainingPercent = status.remainingPercent;
-            this.remove_style_class_name('cuotax-icon-warning');
-            this.remove_style_class_name('cuotax-icon-critical');
-            this.remove_style_class_name('cuotax-icon-unavailable');
-            if (status.level === 'warning') this.add_style_class_name('cuotax-icon-warning');
-            else if (status.level === 'critical') this.add_style_class_name('cuotax-icon-critical');
-            else if (status.level === 'unavailable')
-                this.add_style_class_name('cuotax-icon-unavailable');
             this.queue_repaint();
         }
 
         _repaint() {
             const [width, height] = this.get_surface_size();
-            const color = this.get_theme_node().get_foreground_color();
+            const color = this._color ?? this.get_theme_node().get_foreground_color();
+            const alpha = color.alpha / 255;
             const cr = this.get_context();
             const size = Math.min(width, height);
             const scale = size / 16;
@@ -67,18 +68,18 @@ const QuotaIcon = GObject.registerClass(
             const start = -Math.PI / 2;
 
             cr.setLineWidth(lineWidth);
-            cr.setSourceRGBA(color.red / 255, color.green / 255, color.blue / 255, 0.25);
+            cr.setSourceRGBA(color.red / 255, color.green / 255, color.blue / 255, 0.25 * alpha);
             cr.arc(x, y, radius, 0, 2 * Math.PI);
             cr.stroke();
 
             if (this._remainingPercent !== null) {
-                cr.setSourceColor(color);
+                cr.setSourceRGBA(color.red / 255, color.green / 255, color.blue / 255, alpha);
                 cr.arc(x, y, radius, start, start + (2 * Math.PI * this._remainingPercent) / 100);
                 cr.stroke();
             }
 
             cr.setLineWidth(1.4 * scale);
-            cr.setSourceColor(color);
+            cr.setSourceRGBA(color.red / 255, color.green / 255, color.blue / 255, alpha);
             cr.moveTo(x - 2.2 * scale, y - 2.3 * scale);
             cr.lineTo(x + 0.2 * scale, y);
             cr.lineTo(x - 2.2 * scale, y + 2.3 * scale);
@@ -124,20 +125,16 @@ const CuotaXIndicator = GObject.registerClass(
             const percent = highestPercent(quota);
             const displayed = displayPercent(percent);
             const status = quotaStatus(quota);
-            const level = status.level;
             const pace = paceLabel(status);
+            const color = paceColor(status);
             this._icon.render(status);
+            this._label.set_style(colorStyle(color));
             this._label.text = displayed === null ? '—' : `${Math.round(displayed)}%`;
             this.set_accessible_name(
                 displayed === null
                     ? 'CuotaX unavailable'
                     : `CuotaX ${Math.round(displayed)} percent, ${pace.toLowerCase()}`,
             );
-
-            this.remove_style_class_name('cuotax-warning');
-            this.remove_style_class_name('cuotax-critical');
-            if (level === 'warning') this.add_style_class_name('cuotax-warning');
-            else if (level === 'critical') this.add_style_class_name('cuotax-critical');
 
             this.menu.removeAll();
             this.menu.addMenuItem(this._quotaItem('5-hour', quota.fiveHour, 'fiveHour'));
@@ -156,6 +153,7 @@ const CuotaXIndicator = GObject.registerClass(
 
         renderError(error) {
             this._label.text = '!';
+            this._label.set_style('');
             this._icon.render(quotaStatus(null));
             this.set_accessible_name(`CuotaX unavailable: ${error.message}`);
             this.menu.removeAll();
@@ -184,13 +182,12 @@ const CuotaXIndicator = GObject.registerClass(
                     ? `${label}: ${formatPercent(quota.usedPercent)} used; ${pacing}`
                     : `${label}: unavailable`,
             );
-            item.insert_child_at_index(
-                new St.Icon({
-                    icon_name: 'media-record-symbolic',
-                    style_class: `cuotax-pace-icon cuotax-pace-${status.level}`,
-                }),
-                0,
-            );
+            const icon = new St.Icon({
+                icon_name: 'media-record-symbolic',
+                style_class: 'cuotax-pace-icon',
+            });
+            icon.set_style(colorStyle(paceColor(status)));
+            item.insert_child_at_index(icon, 0);
             return item;
         }
 

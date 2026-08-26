@@ -102,7 +102,13 @@ export function quotaStatus(quota, now = Date.now()) {
         windowStatus(quota?.weekly, 'weekly', WEEK_MINUTES, now),
     ].filter(Boolean);
     if (statuses.length === 0)
-        return {level: 'unavailable', onTrackPercent: null, remainingPercent: null, window: null};
+        return {
+            coverage: null,
+            level: 'unavailable',
+            onTrackPercent: null,
+            remainingPercent: null,
+            window: null,
+        };
 
     const timed = statuses.filter((status) => status.onTrackPercent !== null);
     const candidates = timed.length > 0 ? timed : statuses;
@@ -110,10 +116,30 @@ export function quotaStatus(quota, now = Date.now()) {
         current.coverage < lowest.coverage ? current : lowest,
     );
     return {
+        coverage: status.coverage,
         level: status.level,
         onTrackPercent: status.onTrackPercent,
         remainingPercent: status.remainingPercent,
         window: status.window,
+    };
+}
+
+export function paceColor(status) {
+    if (typeof status.coverage !== 'number' || Number.isNaN(status.coverage)) return null;
+
+    const coverage = Math.min(1, Math.max(0, status.coverage));
+    const hue = 120 * coverage ** 2;
+    const saturation = 0.75;
+    const lightness = 0.55;
+    const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+    const secondary = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
+    const offset = lightness - chroma / 2;
+    const [red, green] = hue < 60 ? [chroma, secondary] : [secondary, chroma];
+    return {
+        red: Math.round((red + offset) * 255),
+        green: Math.round((green + offset) * 255),
+        blue: Math.round(offset * 255),
+        alpha: 255,
     };
 }
 
