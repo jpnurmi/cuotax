@@ -60,9 +60,10 @@ make uninstall
 
 ## macOS
 
-The native SwiftUI app requires macOS 13 or newer and the Codex CLI logged in
-with ChatGPT. It has no Dock icon, refreshes every five minutes, and registers
-itself as a login item the first time it runs.
+Building the native SwiftUI app requires Swift 6.0 or newer. The app runs on
+macOS 13 or newer and requires the Codex CLI logged in with ChatGPT. It has no
+Dock icon, refreshes every five minutes, and ensures it is registered as a login
+item whenever it launches.
 
 Build, install to `~/Applications`, and launch:
 

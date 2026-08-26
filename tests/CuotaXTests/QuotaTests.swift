@@ -73,6 +73,22 @@ import Testing
   #expect(status.onTrackPercent == 50)
 }
 
+@Test func expiredQuotaUsesUntimedSeverity() throws {
+  let now = Date(timeIntervalSince1970: 1_777_000_000)
+  let quota = Quota(
+    fiveHour: QuotaWindow(usedPercent: 100, resetsAt: now.addingTimeInterval(-1)),
+    weekly: nil,
+    updatedAt: now
+  )
+
+  let status = quota.status(now: now)
+  #expect(status.coverage == 0)
+  #expect(status.level == .critical)
+  #expect(status.onTrackPercent == nil)
+  let color = try #require(paceColor(status))
+  #expect(color.red > color.green)
+}
+
 @Test func unavailableQuotaHasNoPaceColor() {
   let status = Quota(fiveHour: nil, weekly: nil, updatedAt: Date()).status()
   #expect(paceColor(status) == nil)
@@ -92,6 +108,7 @@ import Testing
 @Test func quotaFormattingAndSeverity() {
   #expect(displayPercent(131) == 100)
   #expect(displayPercent(-1) == 0)
+  #expect(normalizedPercent(69.96) == 70)
   #expect(formatPercent(42.5) == "42.5%")
   #expect(formatPercent(nil) == "—")
   #expect(severity(70) == .warning)

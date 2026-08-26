@@ -45,44 +45,85 @@ private final class ProcessContext: @unchecked Sendable {
   let input = Pipe()
   let output = Pipe()
   let error = Pipe()
+  private let errorQueue = DispatchQueue(label: "com.jpnurmi.CuotaX.stderr")
+  private let errorsCaptured = DispatchGroup()
   private let lock = NSLock()
+  private var didCancel = false
+  private var didStart = false
   private var didTimeOut = false
   private var errorData = Data()
+
+  var cancelled: Bool {
+    lock.withLock { didCancel }
+  }
 
   var timedOut: Bool {
     lock.withLock { didTimeOut }
   }
 
+  func cancel() {
+    lock.withLock { didCancel = true }
+    terminate()
+  }
+
   func timeOut() {
     lock.withLock { didTimeOut = true }
+    terminate()
+  }
+
+  func started() {
+    let shouldTerminate = lock.withLock {
+      didStart = true
+      return didCancel || didTimeOut
+    }
+    if shouldTerminate {
+      terminate()
+    }
+  }
+
+  func checkCancellation() throws {
+    if cancelled {
+      throw CancellationError()
+    }
+  }
+
+  private func terminate() {
     if process.isRunning {
       kill(process.processIdentifier, SIGKILL)
     }
   }
 
   func captureErrors() {
-    error.fileHandleForReading.readabilityHandler = { [weak self] handle in
-      let data = handle.availableData
-      guard !data.isEmpty else {
-        handle.readabilityHandler = nil
-        return
-      }
-      self?.lock.withLock { self?.errorData.append(data) }
+    errorsCaptured.enter()
+    errorQueue.async { [self] in
+      let data = (try? error.fileHandleForReading.readToEnd()) ?? Data()
+      lock.withLock { errorData.append(data) }
+      errorsCaptured.leave()
     }
   }
 
-  func diagnostic(fallback: String) -> String {
-    let text = lock.withLock { String(decoding: errorData, as: UTF8.self) }
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    return text.isEmpty ? fallback : text
+  func terminateAndWait() {
+    terminate()
+    if lock.withLock({ didStart }) {
+      process.waitUntilExit()
+    }
+    errorsCaptured.wait()
   }
 
-  func stopCapturingErrors() {
-    error.fileHandleForReading.readabilityHandler = nil
+  func diagnostic(fallback: String) -> String {
+    let text = lock.withLock { String(bytes: errorData, encoding: .utf8) ?? "" }
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return text.isEmpty ? fallback : text
   }
 }
 
 struct CodexClient: Sendable {
+  private static let queue = DispatchQueue(
+    label: "com.jpnurmi.CuotaX.CodexClient",
+    qos: .userInitiated,
+    attributes: .concurrent
+  )
+
   private let executable: URL?
   private let environment: [String: String]
   private let timeout: TimeInterval
@@ -98,12 +139,29 @@ struct CodexClient: Sendable {
   }
 
   func readQuota() async throws -> Quota {
-    try await Task.detached {
-      try readQuotaSynchronously()
-    }.value
+    let context = ProcessContext()
+    return try await withTaskCancellationHandler {
+      try Task.checkCancellation()
+      return try await withCheckedThrowingContinuation { continuation in
+        Self.queue.async {
+          do {
+            try context.checkCancellation()
+            let quota = try readQuotaSynchronously(context: context)
+            try context.checkCancellation()
+            continuation.resume(returning: quota)
+          } catch {
+            continuation.resume(
+              throwing: context.cancelled ? CancellationError() : error
+            )
+          }
+        }
+      }
+    } onCancel: {
+      context.cancel()
+    }
   }
 
-  private func readQuotaSynchronously() throws -> Quota {
+  private func readQuotaSynchronously(context: ProcessContext) throws -> Quota {
     guard let executable else {
       throw BackendError(
         message: "Codex CLI not found",
@@ -111,7 +169,6 @@ struct CodexClient: Sendable {
       )
     }
 
-    let context = ProcessContext()
     context.process.executableURL = executable
     context.process.arguments = ["app-server", "--stdio"]
     context.process.standardInput = context.input
@@ -121,10 +178,10 @@ struct CodexClient: Sendable {
     environment["PATH"] = Self.searchPaths(executable: executable, environment: environment)
       .joined(separator: ":")
     context.process.environment = environment
-    context.captureErrors()
-
     do {
       try context.process.run()
+      context.started()
+      context.captureErrors()
     } catch {
       throw BackendError(
         message: "Codex quota request failed",
@@ -138,11 +195,10 @@ struct CodexClient: Sendable {
     defer {
       timeoutWork.cancel()
       try? context.input.fileHandleForWriting.close()
-      if context.process.isRunning {
-        kill(context.process.processIdentifier, SIGKILL)
-      }
-      context.stopCapturingErrors()
+      context.terminateAndWait()
     }
+
+    try context.checkCancellation()
 
     do {
       try context.input.fileHandleForWriting.write(contentsOf: Self.request)
@@ -157,10 +213,13 @@ struct CodexClient: Sendable {
     while true {
       let data = context.output.fileHandleForReading.availableData
       if data.isEmpty {
+        context.terminateAndWait()
+        try context.checkCancellation()
         if context.timedOut {
           throw BackendError(
             message: "Codex quota request timed out",
-            diagnostic: "No response within \(Int(timeout)) seconds"
+            diagnostic: context.diagnostic(
+              fallback: "No response within \(Int(timeout)) seconds")
           )
         }
         throw BackendError(
@@ -217,9 +276,9 @@ struct CodexClient: Sendable {
         usedPercent: usedPercent,
         resetsAt: value.resetsAt.map { Date(timeIntervalSince1970: $0) }
       )
-      if value.windowDurationMins == 300 {
+      if value.windowDurationMins == fiveHourWindowDurationMinutes {
         fiveHour = window
-      } else if value.windowDurationMins == 7 * 24 * 60 {
+      } else if value.windowDurationMins == weeklyWindowDurationMinutes {
         weekly = window
       }
     }

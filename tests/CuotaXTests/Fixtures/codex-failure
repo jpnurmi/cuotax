@@ -1,4 +1,6 @@
 #!/bin/sh
 
-echo "fixture app-server failed" >&2
+printf 'fixture app-server ' >&2
+sleep 0.05
+printf 'failed\n' >&2
 exit 1

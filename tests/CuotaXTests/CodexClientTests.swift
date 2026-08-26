@@ -53,6 +53,53 @@ import Testing
   }
 }
 
+@Test func reportsMissingExecutable() async {
+  do {
+    _ = try await CodexClient(executable: nil).readQuota()
+    Issue.record("Expected the missing Codex CLI to fail")
+  } catch let error as BackendError {
+    #expect(error.message == "Codex CLI not found")
+  } catch {
+    Issue.record("Expected BackendError, got \(error)")
+  }
+}
+
+@Test func reportsTimeout() async throws {
+  let fixture = try #require(
+    Bundle.module.url(
+      forResource: "codex-hang", withExtension: nil, subdirectory: "Fixtures"))
+  try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fixture.path)
+
+  do {
+    _ = try await CodexClient(executable: fixture, timeout: 0.1).readQuota()
+    Issue.record("Expected the app-server request to time out")
+  } catch let error as BackendError {
+    #expect(error.message == "Codex quota request timed out")
+    #expect(error.diagnostic.hasPrefix("No response within"))
+  }
+}
+
+@Test func cancellationStopsRequest() async throws {
+  let fixture = try #require(
+    Bundle.module.url(
+      forResource: "codex-hang", withExtension: nil, subdirectory: "Fixtures"))
+  try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fixture.path)
+
+  let task = Task {
+    try await CodexClient(executable: fixture, timeout: 5).readQuota()
+  }
+  try await Task.sleep(nanoseconds: 50_000_000)
+  task.cancel()
+
+  do {
+    _ = try await task.value
+    Issue.record("Expected the app-server request to be cancelled")
+  } catch is CancellationError {
+  } catch {
+    Issue.record("Expected CancellationError, got \(error)")
+  }
+}
+
 @Test func readsLiveQuotaWhenRequested() async throws {
   let environment = ProcessInfo.processInfo.environment
   guard environment["CODEX_TEST_LIVE"] == "1", let command = environment["CODEX_TEST_COMMAND"]

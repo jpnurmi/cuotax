@@ -69,6 +69,15 @@ final class AppModel: ObservableObject {
     if quota == nil { isLoading = true }
     refreshTask = Task { [weak self] in
       guard let self else { return }
+      defer {
+        self.isLoading = false
+        self.refreshTask = nil
+        if self.queued {
+          self.queued = false
+          self.refresh()
+        }
+      }
+
       do {
         let quota = try await client.readQuota()
         guard !Task.isCancelled else { return }
@@ -83,12 +92,6 @@ final class AppModel: ObservableObject {
           message: "Codex quota request failed",
           diagnostic: error.localizedDescription
         )
-      }
-      self.isLoading = false
-      self.refreshTask = nil
-      if self.queued {
-        self.queued = false
-        self.refresh()
       }
     }
   }

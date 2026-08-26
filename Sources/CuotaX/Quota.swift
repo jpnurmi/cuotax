@@ -2,6 +2,9 @@
 
 import Foundation
 
+let fiveHourWindowDurationMinutes = 5 * 60
+let weeklyWindowDurationMinutes = 7 * 24 * 60
+
 struct QuotaWindow: Equatable, Sendable {
   let usedPercent: Double
   let resetsAt: Date?
@@ -44,8 +47,10 @@ struct QuotaStatus: Sendable {
 extension Quota {
   func status(now: Date = Date()) -> QuotaStatus {
     let statuses = [
-      windowStatus(fiveHour, name: "5-hour", durationMinutes: 300, now: now),
-      windowStatus(weekly, name: "weekly", durationMinutes: 7 * 24 * 60, now: now),
+      windowStatus(
+        fiveHour, name: "5-hour", durationMinutes: fiveHourWindowDurationMinutes, now: now),
+      windowStatus(
+        weekly, name: "weekly", durationMinutes: weeklyWindowDurationMinutes, now: now),
     ].compactMap(\.self)
 
     guard !statuses.isEmpty else {
@@ -73,14 +78,14 @@ private struct RankedStatus {
 private func windowStatus(
   _ value: QuotaWindow?,
   name: String,
-  durationMinutes: Double,
+  durationMinutes: Int,
   now: Date
 ) -> RankedStatus? {
   guard let value else { return nil }
 
-  let usedPercent = displayPercent(value.usedPercent)
+  let usedPercent = normalizedPercent(value.usedPercent)
   let remainingPercent = 100 - usedPercent
-  guard let resetsAt = value.resetsAt else {
+  guard let resetsAt = value.resetsAt, resetsAt > now else {
     return RankedStatus(
       coverage: remainingPercent / 100,
       status: QuotaStatus(
@@ -93,13 +98,12 @@ private func windowStatus(
     )
   }
 
-  let duration = durationMinutes * 60
+  let duration = Double(durationMinutes * 60)
   let timeRemaining = min(1, max(0, resetsAt.timeIntervalSince(now) / duration))
   let onTrackPercent = (1000 * (1 - timeRemaining)).rounded() / 10
-  let coverage = timeRemaining == 0 ? .infinity : remainingPercent / 100 / timeRemaining
-  let roundedUsed = (usedPercent * 10).rounded() / 10
+  let coverage = remainingPercent / 100 / timeRemaining
   let level: QuotaLevel =
-    if roundedUsed <= onTrackPercent {
+    if usedPercent <= onTrackPercent {
       .normal
     } else if coverage < 0.5 {
       .critical
@@ -149,6 +153,10 @@ func displayPercent(_ value: Double) -> Double {
   min(100, max(0, value))
 }
 
+func normalizedPercent(_ value: Double) -> Double {
+  (displayPercent(value) * 10).rounded() / 10
+}
+
 func severity(_ value: Double) -> QuotaLevel {
   if value >= 90 { return .critical }
   if value >= 70 { return .warning }
@@ -163,22 +171,11 @@ func formatPercent(_ value: Double?) -> String {
     : String(format: "%.1f%%", displayed)
 }
 
-private let timeFormatter: DateFormatter = {
-  let formatter = DateFormatter()
-  formatter.dateFormat = "HH:mm"
-  return formatter
-}()
-
-private let resetFormatter: DateFormatter = {
-  let formatter = DateFormatter()
-  formatter.dateFormat = "yyyy-MM-dd HH:mm"
-  return formatter
-}()
-
 func formatTime(_ value: Date?) -> String {
-  value.map { timeFormatter.string(from: $0) } ?? "—"
+  value?.formatted(date: .omitted, time: .shortened) ?? "—"
 }
 
 func formatReset(_ value: Date?) -> String {
-  value.map { "resets \(resetFormatter.string(from: $0))" } ?? "reset unknown"
+  value.map { "resets \($0.formatted(date: .numeric, time: .shortened))" }
+    ?? "reset unknown"
 }

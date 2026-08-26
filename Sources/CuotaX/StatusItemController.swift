@@ -6,15 +6,16 @@ import Combine
 @MainActor
 final class StatusItemController: NSObject, NSMenuDelegate {
   private let model = AppModel()
-  private let loginItem = LoginItem()
   private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
   private let menu = NSMenu()
   private var cancellables = Set<AnyCancellable>()
+  private var isMenuOpen = false
 
   override init() {
     super.init()
 
     menu.delegate = self
+    menu.autoenablesItems = false
     item.menu = menu
     item.button?.imagePosition = .imageLeading
     item.button?.imageHugsTitle = true
@@ -26,19 +27,27 @@ final class StatusItemController: NSObject, NSMenuDelegate {
       }
       .store(in: &cancellables)
 
+    LoginItem.registerIfNeeded()
     render()
     model.start()
-    loginItem.registerIfNeeded()
   }
 
   func menuWillOpen(_ menu: NSMenu) {
+    isMenuOpen = true
     model.refreshIfStale()
+    renderMenu()
+  }
+
+  func menuDidClose(_ menu: NSMenu) {
+    isMenuOpen = false
     renderMenu()
   }
 
   private func render() {
     renderButton()
-    renderMenu()
+    if !isMenuOpen {
+      renderMenu()
+    }
   }
 
   private func renderButton() {
@@ -103,7 +112,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     let reference =
       quota.flatMap { value in
         status.onTrackPercent.map {
-          " (\(value.usedPercent <= $0 ? "≤" : ">")\(formatPercent($0)))"
+          " (\(normalizedPercent(value.usedPercent) <= $0 ? "≤" : ">")\(formatPercent($0)))"
         }
       } ?? ""
     let title =
@@ -125,7 +134,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
   private func infoItem(_ title: String, color: NSColor = .secondaryLabelColor) -> NSMenuItem {
     let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-    item.isEnabled = false
     item.attributedTitle = NSAttributedString(
       string: title,
       attributes: [.foregroundColor: color]

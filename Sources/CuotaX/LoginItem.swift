@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 
+import Foundation
 import ServiceManagement
 
 @MainActor
 final class LoginItem {
-  func registerIfNeeded() {
+  static func registerIfNeeded() {
     let status = SMAppService.mainApp.status
     guard status != .enabled && status != .requiresApproval else { return }
+
     do {
       try SMAppService.mainApp.register()
     } catch {
