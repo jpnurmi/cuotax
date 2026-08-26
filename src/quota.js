@@ -102,7 +102,9 @@ export function quotaStatus(quota, now = Date.now()) {
     if (statuses.length === 0)
         return {level: 'unavailable', onTrackPercent: null, remainingPercent: null, window: null};
 
-    const status = statuses.reduce((lowest, current) =>
+    const timed = statuses.filter((status) => status.onTrackPercent !== null);
+    const candidates = timed.length > 0 ? timed : statuses;
+    const status = candidates.reduce((lowest, current) =>
         current.coverage < lowest.coverage ? current : lowest,
     );
     return {
@@ -114,6 +116,7 @@ export function quotaStatus(quota, now = Date.now()) {
 }
 
 export function paceLabel(status) {
+    if (status.onTrackPercent === null) return 'Pace unavailable';
     if (status.level === 'normal') return 'On track';
     if (status.level === 'warning') return 'Running high';
     if (status.level === 'critical') return 'At risk';

@@ -79,6 +79,19 @@ status = quotaStatus({weekly: {usedPercent: 90, resetsAt: statusNow + 60 * 60 * 
 assertEqual(status.level, 'normal');
 assertEqual(status.window, 'weekly');
 assertEqual(Math.round(status.onTrackPercent * 10) / 10, 99.4);
+status = quotaStatus(
+    {
+        fiveHour: {usedPercent: 10, resetsAt: null},
+        weekly: {usedPercent: 10, resetsAt: statusNow + 3.5 * 24 * 60 * 60 * 1000},
+    },
+    statusNow,
+);
+assertEqual(status.window, 'weekly');
+assertEqual(status.onTrackPercent, 50);
+status = quotaStatus({fiveHour: {usedPercent: 75, resetsAt: null}}, statusNow);
+assertEqual(status.level, 'warning');
+assertEqual(status.window, '5-hour');
+assertEqual(paceLabel(status), 'Pace unavailable');
 status = quotaStatus(null, statusNow);
 assertEqual(status.level, 'unavailable');
 assertEqual(status.onTrackPercent, null);

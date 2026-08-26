@@ -175,9 +175,13 @@ const CuotaXIndicator = GObject.registerClass(
                 ? `${label}  ${formatPercent(used)}${reference} · ${formatReset(quota.resetsAt)}`
                 : `${label}  —`;
             const item = infoItem(text);
+            const pacing =
+                status.onTrackPercent === null
+                    ? 'pacing unavailable'
+                    : `${formatPercent(status.onTrackPercent)} is on track`;
             item.set_accessible_name(
                 quota
-                    ? `${label}: ${formatPercent(quota.usedPercent)} used; ${formatPercent(status.onTrackPercent)} is on track`
+                    ? `${label}: ${formatPercent(quota.usedPercent)} used; ${pacing}`
                     : `${label}: unavailable`,
             );
             item.insert_child_at_index(
