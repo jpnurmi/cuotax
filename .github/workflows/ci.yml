@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
 
@@ -14,8 +16,13 @@ permissions:
 
 jobs:
   lint:
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
+    name: lint (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-26.04, macos-26]
 
     steps:
       - name: Check out repository
@@ -30,8 +37,13 @@ jobs:
         run: make lint
 
   format:
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
+    name: format (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-26.04, macos-26]
 
     steps:
       - name: Check out repository
@@ -46,8 +58,15 @@ jobs:
         run: make format-check
 
   build:
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
+    name: build (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-26.04
+          - runner: macos-26
 
     steps:
       - name: Check out repository
@@ -55,19 +74,28 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install packaging tools
+      - name: Install Linux dependencies
+        if: ${{ runner.os == 'Linux' }}
         run: |
           sudo apt-get update
           sudo apt-get install --yes gnome-shell unzip
 
-      - name: Build extension
-        run: |
-          make build
-          unzip -t dist/cuotax@jpnurmi.github.com.shell-extension.zip
+      - name: Build
+        run: make build
+
+      - name: Verify
+        run: make verify
 
   test:
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
+    name: test (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-26.04
+          - runner: macos-26
 
     steps:
       - name: Check out repository
@@ -75,7 +103,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install GJS
+      - name: Install Linux dependencies
+        if: ${{ runner.os == 'Linux' }}
         run: |
           sudo apt-get update
           sudo apt-get install --yes gjs

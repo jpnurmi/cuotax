@@ -1,20 +1,65 @@
 UUID := cuotax@jpnurmi.github.com
 EXTENSION_DIR := src
 ARCHIVE := dist/$(UUID).shell-extension.zip
+SYSTEM := $(shell uname -s)
+MACOS_APP := $(HOME)/Applications/CuotaX.app
+PLATFORM_FORMAT :=
+PLATFORM_FORMAT_CHECK :=
 
-.PHONY: build disable enable format format-check install lint test uninstall
+ifeq ($(SYSTEM),Darwin)
+PLATFORM_FORMAT := swift format --in-place --recursive Sources tests/CuotaXTests Package.swift
+PLATFORM_FORMAT_CHECK := swift format lint --recursive Sources tests/CuotaXTests Package.swift
+endif
 
-build:
-	scripts/pack-gnome-extension.sh
+.PHONY: build disable enable format format-check install lint test uninstall verify
 
 lint:
 	npm run lint
 
 format:
 	npm run format
+	$(PLATFORM_FORMAT)
 
 format-check:
 	npm run format:check
+	$(PLATFORM_FORMAT_CHECK)
+
+ifeq ($(SYSTEM),Darwin)
+
+build:
+	scripts/build-macos-app.sh
+
+test:
+	swift test
+
+verify: build
+	codesign --verify --deep --strict --verbose=2 dist/CuotaX.app
+	plutil -lint dist/CuotaX.app/Contents/Info.plist
+
+install: build
+	@pkill -x CuotaX >/dev/null 2>&1 || true
+	@case "$(MACOS_APP)" in */Applications/CuotaX.app) ;; *) echo "Refusing to remove unexpected path: $(MACOS_APP)" >&2; exit 1;; esac
+	rm -rf "$(MACOS_APP)"
+	mkdir -p "$(dir $(MACOS_APP))"
+	ditto "dist/CuotaX.app" "$(MACOS_APP)"
+	open "$(MACOS_APP)"
+
+uninstall:
+	@if [ -x "$(MACOS_APP)/Contents/MacOS/CuotaX" ]; then \
+		"$(MACOS_APP)/Contents/MacOS/CuotaX" --unregister; \
+	fi
+	@pkill -x CuotaX >/dev/null 2>&1 || true
+	@case "$(MACOS_APP)" in */Applications/CuotaX.app) ;; *) echo "Refusing to remove unexpected path: $(MACOS_APP)" >&2; exit 1;; esac
+	rm -rf "$(MACOS_APP)"
+
+enable disable:
+	@echo "$@ is only available for the GNOME Shell extension" >&2
+	@exit 1
+
+else ifeq ($(SYSTEM),Linux)
+
+build:
+	scripts/pack-gnome-extension.sh
 
 test:
 	node --check $(EXTENSION_DIR)/backend.js
@@ -22,6 +67,9 @@ test:
 	node --check $(EXTENSION_DIR)/quota.js
 	gjs -m tests/gjs/test_quota.js
 	CODEX_TEST_COMMAND="$(CURDIR)/tests/fixtures/codex" gjs -m tests/gjs/test_backend.js
+
+verify: build
+	unzip -t "$(ARCHIVE)"
 
 install: build
 	gnome-extensions install --force "$(ARCHIVE)"
@@ -39,3 +87,11 @@ disable:
 
 uninstall:
 	gnome-extensions uninstall "$(UUID)"
+
+else
+
+build install test uninstall enable disable verify:
+	@echo "Unsupported platform: $(SYSTEM)" >&2
+	@exit 1
+
+endif
