@@ -1,7 +1,11 @@
 UUID := cuotax@jpnurmi.github.com
 EXTENSION_DIR := src
 ARCHIVE := dist/$(UUID).shell-extension.zip
+ifeq ($(OS),Windows_NT)
+SYSTEM := Windows_NT
+else
 SYSTEM := $(shell uname -s)
+endif
 MACOS_APP := $(HOME)/Applications/CuotaX.app
 PLATFORM_FORMAT :=
 PLATFORM_FORMAT_CHECK :=
@@ -87,6 +91,27 @@ disable:
 
 uninstall:
 	gnome-extensions uninstall "$(UUID)"
+
+else ifeq ($(SYSTEM),Windows_NT)
+
+build:
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1
+
+test:
+	dotnet run --project tests/CuotaX.Windows.Tests/CuotaX.Windows.Tests.csproj --configuration Release
+
+verify: build
+	powershell.exe -NoProfile -Command "if (-not (Test-Path -LiteralPath 'dist/windows/CuotaX.exe')) { exit 1 }"
+
+install:
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/install-windows.ps1
+
+uninstall:
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/uninstall-windows.ps1
+
+enable disable:
+	@echo "$@ is only available for the GNOME Shell extension" >&2
+	@exit 1
 
 else
 

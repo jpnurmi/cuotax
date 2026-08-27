@@ -1,8 +1,8 @@
 # CuotaX
 
-A minimal GNOME Shell extension and native macOS menu-bar app that show the
-highest active Codex quota percentage. The menu shows the 5-hour and weekly
-quotas with local reset times.
+A minimal GNOME Shell extension, native macOS menu-bar app, and native Windows
+notification-area app that show the highest active Codex quota percentage. The
+menu shows the 5-hour and weekly quotas with local reset times.
 
 ![CuotaX showing Codex quota usage in the GNOME top panel](.github/screenshot.png)
 
@@ -85,6 +85,47 @@ make uninstall
 
 The development build is ad-hoc signed locally. Distribution to other
 Macs requires signing and notarization with an Apple Developer identity.
+
+## Windows
+
+The native Windows notification-area app requires the .NET 10 SDK to build and
+the .NET 10 Desktop Runtime to run. It also requires the native Windows Codex
+CLI logged in with ChatGPT. The tray icon shows the highest active quota as a
+two-digit overlay. Exhausted quota is shown as a deep-red `×`, while backend or
+authentication failures use a distinct `!` icon.
+
+Build the framework-dependent single-file executable:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1
+```
+
+Install to `%LOCALAPPDATA%\Programs\CuotaX`, register it to start with Windows,
+and launch it:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/install-windows.ps1
+```
+
+Run the Windows tests:
+
+```powershell
+dotnet run --project tests/CuotaX.Windows.Tests/CuotaX.Windows.Tests.csproj --configuration Release
+```
+
+For development, launch without changing startup registration:
+
+```powershell
+dotnet run --project windows/CuotaX/CuotaX.csproj -- --no-register
+```
+
+Remove the startup registration and installed app:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/uninstall-windows.ps1
+```
+
+The equivalent `make` targets are also available when GNU Make is installed.
 
 The protocol and rate-limit fields are documented in the
 [Codex App Server documentation](https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt).

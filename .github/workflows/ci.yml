@@ -111,3 +111,38 @@ jobs:
 
       - name: Test
         run: make test
+
+  windows:
+    name: windows
+    runs-on: windows-2025
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build
+        run: powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1
+
+      - name: Test
+        run: dotnet run --project tests/CuotaX.Windows.Tests/CuotaX.Windows.Tests.csproj --configuration Release
+
+      - name: Check formatting
+        shell: pwsh
+        run: |
+          dotnet format windows/CuotaX/CuotaX.csproj --verify-no-changes --no-restore
+          dotnet format tests/CuotaX.Windows.Tests/CuotaX.Windows.Tests.csproj --verify-no-changes --no-restore
+
+      - name: Verify
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath "dist/windows/CuotaX.exe")) {
+            throw "Windows executable was not published"
+          }
