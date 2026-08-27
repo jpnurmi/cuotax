@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
 
@@ -64,7 +66,6 @@ jobs:
       matrix:
         include:
           - runner: ubuntu-26.04
-            packages: gnome-shell unzip
           - runner: macos-26
 
     steps:
@@ -73,13 +74,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install system tools
-        if: matrix.packages
-        env:
-          PACKAGES: ${{ matrix.packages }}
+      - name: Install Linux dependencies
+        if: ${{ runner.os == 'Linux' }}
         run: |
           sudo apt-get update
-          sudo apt-get install --yes $PACKAGES
+          sudo apt-get install --yes gnome-shell unzip
 
       - name: Build
         run: make build
@@ -96,7 +95,6 @@ jobs:
       matrix:
         include:
           - runner: ubuntu-26.04
-            packages: gjs
           - runner: macos-26
 
     steps:
@@ -105,13 +103,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install system tools
-        if: matrix.packages
-        env:
-          PACKAGES: ${{ matrix.packages }}
+      - name: Install Linux dependencies
+        if: ${{ runner.os == 'Linux' }}
         run: |
           sudo apt-get update
-          sudo apt-get install --yes $PACKAGES
+          sudo apt-get install --yes gjs
 
       - name: Test
         run: make test
