@@ -13,6 +13,9 @@ PLATFORM_FORMAT_CHECK :=
 ifeq ($(SYSTEM),Darwin)
 PLATFORM_FORMAT := swift format --in-place --recursive Sources tests/CuotaXTests Package.swift
 PLATFORM_FORMAT_CHECK := swift format lint --recursive Sources tests/CuotaXTests Package.swift
+else ifeq ($(SYSTEM),Windows_NT)
+PLATFORM_FORMAT := powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/format-windows.ps1
+PLATFORM_FORMAT_CHECK := powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/format-windows.ps1 -Check
 endif
 
 .PHONY: build disable enable format format-check install lint test uninstall verify
