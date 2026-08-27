@@ -26,6 +26,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private Icon? _icon;
     private Quota? _quota;
     private BackendException? _error;
+    private BackendException? _startupError;
     private bool _refreshing;
     private bool _queued;
     private bool _started;
@@ -49,8 +50,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
             {
                 StartupRegistration.Register();
             }
-            catch
+            catch (Exception error)
             {
+                _startupError = new BackendException("Could not register startup", error.Message);
             }
         }
 
@@ -163,7 +165,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         var visual = _quota is not null
             ? TrayIconRenderer.ForQuota(_quota)
-            : _error is not null
+            : _error is not null || _startupError is not null
                 ? TrayIconRenderer.Error()
                 : TrayIconRenderer.LoadingState();
         var icon = TrayIconRenderer.Create(visual);
@@ -187,7 +189,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return Shorten($"CuotaX — {percent} used, {_quota.Status().PaceLabel.ToLowerInvariant()}");
         }
 
-        return Shorten(_error is null ? "CuotaX — loading" : $"CuotaX unavailable — {_error.Message}");
+        var error = _error ?? _startupError;
+        return Shorten(error is null ? "CuotaX — loading" : $"CuotaX unavailable — {error.Message}");
     }
 
     private void RenderMenu()
@@ -209,13 +212,20 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 AddInfo("Refresh failed · showing previous data");
                 AddInfo(_error.Diagnostic);
             }
+            if (_startupError is not null)
+            {
+                _menu.Items.Add(new ToolStripSeparator());
+                AddInfo(_startupError.Message);
+                AddInfo(_startupError.Diagnostic);
+            }
             _menu.Items.Add(new ToolStripSeparator());
             AddInfo($"Updated {QuotaFormatting.Time(_quota.UpdatedAt)}");
         }
-        else if (_error is not null)
+        else if (_error is not null || _startupError is not null)
         {
-            AddInfo(_error.Message);
-            AddInfo(_error.Diagnostic);
+            var error = _error ?? _startupError!;
+            AddInfo(error.Message);
+            AddInfo(error.Diagnostic);
         }
         else
         {
@@ -241,15 +251,14 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
-        var quota = new Quota(
-            fiveHour ? window : null,
-            fiveHour ? null : window,
-            DateTimeOffset.Now
+        var status = Quota.StatusFor(
+            window,
+            fiveHour ? "5-hour" : "weekly",
+            fiveHour ? QuotaFormatting.FiveHourMinutes : QuotaFormatting.WeeklyMinutes
         );
-        var status = quota.Status();
         var reference = status.OnTrackPercent is null
             ? string.Empty
-            : $" ({(QuotaFormatting.NormalizePercent(window.UsedPercent) <= status.OnTrackPercent ? "≤" : ">")}{QuotaFormatting.Percent(status.OnTrackPercent)})";
+            : $" ({(status.Level == QuotaLevel.Normal ? "≤" : ">")}{QuotaFormatting.Percent(status.OnTrackPercent)})";
         AddInfo(
             $"{label}  {QuotaFormatting.Percent(window.UsedPercent)}{reference} · {QuotaFormatting.Reset(window.ResetsAt)}"
         );

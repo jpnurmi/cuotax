@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 using System.Drawing.Drawing2D;
+using System.Globalization;
 using CuotaX;
 
 if (args is ["--fixture", var fixture, ..])
@@ -15,6 +16,7 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("quota formatting", TestQuotaFormatting),
     ("tray icon states", TestTrayIconStates),
     ("app-server quota", TestAppServerQuota),
+    ("app-server invalid reset", TestAppServerInvalidReset),
     ("app-server error", TestAppServerError),
     ("app-server timeout", TestAppServerTimeout),
 };
@@ -49,6 +51,14 @@ static Task TestQuotaPacing()
     Equal(50d, status.OnTrackPercent);
     Equal(75d, status.RemainingPercent);
     Equal("5-hour", status.Window);
+    Equal(
+        status,
+        Quota.StatusFor(quota.FiveHour, "5-hour", QuotaFormatting.FiveHourMinutes, now)
+    );
+    Equal(
+        QuotaStatus.Unavailable,
+        Quota.StatusFor(null, "5-hour", QuotaFormatting.FiveHourMinutes, now)
+    );
 
     quota = new Quota(new QuotaWindow(80, now.AddMinutes(240)), null, now);
     status = quota.Status(now);
@@ -62,7 +72,17 @@ static Task TestQuotaFormatting()
     Equal(100d, QuotaFormatting.DisplayPercent(131));
     Equal(0d, QuotaFormatting.DisplayPercent(-1));
     Equal(70d, QuotaFormatting.NormalizePercent(69.96));
-    Equal("42.5%", QuotaFormatting.Percent(42.5));
+    var previousCulture = CultureInfo.CurrentCulture;
+    try
+    {
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("sv-SE");
+        Equal("42%", QuotaFormatting.Percent(42));
+        Equal("42,5%", QuotaFormatting.Percent(42.5));
+    }
+    finally
+    {
+        CultureInfo.CurrentCulture = previousCulture;
+    }
     Equal(QuotaLevel.Warning, QuotaFormatting.Severity(70));
     Equal(QuotaLevel.Critical, QuotaFormatting.Severity(90));
     return Task.CompletedTask;
@@ -119,6 +139,13 @@ static async Task TestAppServerError()
     }
 }
 
+static async Task TestAppServerInvalidReset()
+{
+    var quota = await Client("invalid-reset").ReadQuotaAsync();
+    Equal(42d, quota.FiveHour?.UsedPercent);
+    Equal(null, quota.FiveHour?.ResetsAt);
+}
+
 static async Task TestAppServerTimeout()
 {
     try
@@ -161,6 +188,14 @@ static async Task RunFixture(string fixture)
     else if (fixture == "failure")
     {
         Console.Error.WriteLine("fixture app-server failed");
+    }
+    else if (fixture == "invalid-reset")
+    {
+        Console.WriteLine(
+            """
+            {"id":1,"result":{"rateLimits":{"primary":{"usedPercent":42,"windowDurationMins":300,"resetsAt":253402300800}}}}
+            """
+        );
     }
     else if (fixture == "hang")
     {

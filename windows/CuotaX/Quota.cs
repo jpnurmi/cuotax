@@ -38,6 +38,14 @@ internal sealed record Quota(QuotaWindow? FiveHour, QuotaWindow? Weekly, DateTim
         return (timed.Length == 0 ? statuses : timed).MinBy(value => value.Coverage)!.Status;
     }
 
+    internal static QuotaStatus StatusFor(
+        QuotaWindow? value,
+        string window,
+        int durationMinutes,
+        DateTimeOffset? now = null
+    ) => WindowStatus(value, window, durationMinutes, now ?? DateTimeOffset.Now)?.Status
+        ?? QuotaStatus.Unavailable;
+
     private static RankedStatus? WindowStatus(
         QuotaWindow? value,
         string window,
@@ -169,9 +177,8 @@ internal static class QuotaFormatting
         }
 
         var displayed = DisplayPercent(value.Value);
-        return displayed == Math.Round(displayed)
-            ? $"{displayed:0}%"
-            : $"{displayed.ToString("0.0", CultureInfo.InvariantCulture)}%";
+        var format = displayed == Math.Round(displayed) ? "0" : "0.0";
+        return $"{displayed.ToString(format, CultureInfo.CurrentCulture)}%";
     }
 
     internal static string Time(DateTimeOffset? value) => value?.ToLocalTime().ToString("t", CultureInfo.CurrentCulture) ?? "—";

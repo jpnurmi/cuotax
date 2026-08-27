@@ -1,19 +1,27 @@
 # SPDX-License-Identifier: MIT
 
 $ErrorActionPreference = "Stop"
-$programs = (Resolve-Path (Join-Path $env:LOCALAPPDATA "Programs")).Path
+$programs = Join-Path $env:LOCALAPPDATA "Programs"
 $destination = Join-Path $programs "CuotaX"
 $executable = Join-Path $destination "CuotaX.exe"
+
+if (-not (Test-Path -LiteralPath $destination -PathType Container)) {
+    return
+}
+if (-not (Test-Path -LiteralPath $programs -PathType Container)) {
+    return
+}
+
+$resolvedPrograms = (Resolve-Path -LiteralPath $programs).Path
+$resolvedDestination = (Resolve-Path -LiteralPath $destination).Path
+$resolvedParent = Split-Path $resolvedDestination -Parent
+if ($resolvedParent -ne $resolvedPrograms) {
+    throw "Refusing to remove unexpected path: $destination"
+}
 
 if (Test-Path -LiteralPath $executable) {
     & $executable --unregister
 }
 Get-Process -Name "CuotaX" -ErrorAction SilentlyContinue | Stop-Process
 
-$resolvedParent = (Resolve-Path -LiteralPath (Split-Path $destination -Parent)).Path
-if ($resolvedParent -ne $programs) {
-    throw "Refusing to remove unexpected path: $destination"
-}
-if (Test-Path -LiteralPath $destination) {
-    Remove-Item -LiteralPath $destination -Recurse -Force
-}
+Remove-Item -LiteralPath $destination -Recurse -Force

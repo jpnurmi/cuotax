@@ -17,7 +17,8 @@ internal static class StartupRegistration
         }
 
         var command = $"\"{executable}\" --startup";
-        using var key = Registry.CurrentUser.CreateSubKey(KeyPath);
+        using var key = Registry.CurrentUser.CreateSubKey(KeyPath)
+            ?? throw new InvalidOperationException("Could not open the current-user startup registry key");
         key.SetValue(ValueName, command);
     }
 

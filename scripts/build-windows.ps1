@@ -16,3 +16,7 @@ dotnet publish (Join-Path $projectRoot "windows\CuotaX\CuotaX.csproj") `
     -p:PublishSingleFile=true `
     -p:DebugType=None `
     -p:DebugSymbols=false
+
+if ($LASTEXITCODE -ne 0) {
+    throw "dotnet publish failed with exit code $LASTEXITCODE"
+}

@@ -184,7 +184,7 @@ internal sealed class CodexClient(CodexCommand? command = null, TimeSpan? timeou
                 }
                 await process.WaitForExitAsync(CancellationToken.None);
             }
-            catch (InvalidOperationException)
+            catch (Exception)
             {
             }
         }
@@ -212,9 +212,7 @@ internal sealed class CodexClient(CodexCommand? command = null, TimeSpan? timeou
 
             var window = new QuotaWindow(
                 value.UsedPercent.Value,
-                value.ResetsAt is null
-                    ? null
-                    : DateTimeOffset.FromUnixTimeSeconds((long)value.ResetsAt.Value)
+                ResetTime(value.ResetsAt)
             );
             if (value.WindowDurationMins == QuotaFormatting.FiveHourMinutes)
             {
@@ -235,6 +233,19 @@ internal sealed class CodexClient(CodexCommand? command = null, TimeSpan? timeou
         }
 
         return new Quota(fiveHour, weekly, DateTimeOffset.Now);
+    }
+
+    private static DateTimeOffset? ResetTime(double? seconds)
+    {
+        if (seconds is not { } value
+            || !double.IsFinite(value)
+            || value < DateTimeOffset.MinValue.ToUnixTimeSeconds()
+            || value > DateTimeOffset.MaxValue.ToUnixTimeSeconds())
+        {
+            return null;
+        }
+
+        return DateTimeOffset.FromUnixTimeSeconds((long)value);
     }
 
     private static string Diagnostic(string value, string fallback) => string.IsNullOrWhiteSpace(value)
