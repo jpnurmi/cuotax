@@ -1,6 +1,10 @@
 UUID := cuotax@jpnurmi.github.com
-EXTENSION_DIR := src
-ARCHIVE := dist/$(UUID).shell-extension.zip
+GNOME_DIR := gnome
+GNOME_EXTENSION_DIR := $(GNOME_DIR)/extension
+GNOME_ARCHIVE := dist/gnome/$(UUID).shell-extension.zip
+MACOS_DIR := macos
+MACOS_BUILD_APP := dist/macos/CuotaX.app
+WINDOWS_DIR := windows
 ifeq ($(OS),Windows_NT)
 SYSTEM := Windows_NT
 else
@@ -11,44 +15,44 @@ PLATFORM_FORMAT :=
 PLATFORM_FORMAT_CHECK :=
 
 ifeq ($(SYSTEM),Darwin)
-PLATFORM_FORMAT := swift format --in-place --recursive Sources tests/CuotaXTests Package.swift
-PLATFORM_FORMAT_CHECK := swift format lint --recursive Sources tests/CuotaXTests Package.swift
+PLATFORM_FORMAT := swift format --in-place --recursive $(MACOS_DIR)/Sources $(MACOS_DIR)/Tests $(MACOS_DIR)/Package.swift
+PLATFORM_FORMAT_CHECK := swift format lint --recursive $(MACOS_DIR)/Sources $(MACOS_DIR)/Tests $(MACOS_DIR)/Package.swift
 else ifeq ($(SYSTEM),Windows_NT)
-PLATFORM_FORMAT := powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/format-windows.ps1
-PLATFORM_FORMAT_CHECK := powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/format-windows.ps1 -Check
+PLATFORM_FORMAT := powershell.exe -NoProfile -ExecutionPolicy Bypass -File $(WINDOWS_DIR)/scripts/format.ps1
+PLATFORM_FORMAT_CHECK := powershell.exe -NoProfile -ExecutionPolicy Bypass -File $(WINDOWS_DIR)/scripts/format.ps1 -Check
 endif
 
 .PHONY: build disable enable format format-check install lint test uninstall verify
 
 lint:
-	npm run lint
+	npm --prefix $(GNOME_DIR) run lint
 
 format:
-	npm run format
+	npm --prefix $(GNOME_DIR) run format
 	$(PLATFORM_FORMAT)
 
 format-check:
-	npm run format:check
+	npm --prefix $(GNOME_DIR) run format:check
 	$(PLATFORM_FORMAT_CHECK)
 
 ifeq ($(SYSTEM),Darwin)
 
 build:
-	scripts/build-macos-app.sh
+	$(MACOS_DIR)/scripts/build-app.sh
 
 test:
-	swift test
+	swift test --package-path $(MACOS_DIR)
 
 verify: build
-	codesign --verify --deep --strict --verbose=2 dist/CuotaX.app
-	plutil -lint dist/CuotaX.app/Contents/Info.plist
+	codesign --verify --deep --strict --verbose=2 $(MACOS_BUILD_APP)
+	plutil -lint $(MACOS_BUILD_APP)/Contents/Info.plist
 
 install: build
 	@pkill -x CuotaX >/dev/null 2>&1 || true
 	@case "$(MACOS_APP)" in */Applications/CuotaX.app) ;; *) echo "Refusing to remove unexpected path: $(MACOS_APP)" >&2; exit 1;; esac
 	rm -rf "$(MACOS_APP)"
 	mkdir -p "$(dir $(MACOS_APP))"
-	ditto "dist/CuotaX.app" "$(MACOS_APP)"
+	ditto "$(MACOS_BUILD_APP)" "$(MACOS_APP)"
 	open "$(MACOS_APP)"
 
 uninstall:
@@ -66,20 +70,20 @@ enable disable:
 else ifeq ($(SYSTEM),Linux)
 
 build:
-	scripts/pack-gnome-extension.sh
+	$(GNOME_DIR)/scripts/package.sh
 
 test:
-	node --check $(EXTENSION_DIR)/backend.js
-	node --check $(EXTENSION_DIR)/extension.js
-	node --check $(EXTENSION_DIR)/quota.js
-	gjs -m tests/gjs/test_quota.js
-	CODEX_TEST_COMMAND="$(CURDIR)/tests/fixtures/codex" gjs -m tests/gjs/test_backend.js
+	node --check $(GNOME_EXTENSION_DIR)/backend.js
+	node --check $(GNOME_EXTENSION_DIR)/extension.js
+	node --check $(GNOME_EXTENSION_DIR)/quota.js
+	gjs -m $(GNOME_DIR)/tests/test_quota.js
+	CODEX_TEST_COMMAND="$(CURDIR)/$(GNOME_DIR)/tests/fixtures/codex" gjs -m $(GNOME_DIR)/tests/test_backend.js
 
 verify: build
-	unzip -t "$(ARCHIVE)"
+	unzip -t "$(GNOME_ARCHIVE)"
 
 install: build
-	gnome-extensions install --force "$(ARCHIVE)"
+	gnome-extensions install --force "$(GNOME_ARCHIVE)"
 	@if gnome-extensions info "$(UUID)" >/dev/null 2>&1; then \
 		gnome-extensions enable "$(UUID)"; \
 	else \
@@ -98,19 +102,19 @@ uninstall:
 else ifeq ($(SYSTEM),Windows_NT)
 
 build:
-	powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File $(WINDOWS_DIR)/scripts/build.ps1
 
 test:
-	dotnet run --project tests/CuotaX.Windows.Tests/CuotaX.Windows.Tests.csproj --configuration Release
+	dotnet run --project $(WINDOWS_DIR)/CuotaX.Tests/CuotaX.Tests.csproj --configuration Release
 
 verify: build
 	powershell.exe -NoProfile -Command "if (-not (Test-Path -LiteralPath 'dist/windows/CuotaX.exe')) { exit 1 }"
 
 install:
-	powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/install-windows.ps1
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File $(WINDOWS_DIR)/scripts/install.ps1
 
 uninstall:
-	powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/uninstall-windows.ps1
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File $(WINDOWS_DIR)/scripts/uninstall.ps1
 
 enable disable:
 	@echo "$@ is only available for the GNOME Shell extension" >&2

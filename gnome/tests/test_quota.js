@@ -9,7 +9,7 @@ import {
     parseQuota,
     quotaStatus,
     severity,
-} from '../../src/quota.js';
+} from '../extension/quota.js';
 
 function assertEqual(actual, expected) {
     if (actual !== expected)

@@ -9,6 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../windows/CuotaX/CuotaX.csproj" />
+    <ProjectReference Include="../CuotaX/CuotaX.csproj" />
   </ItemGroup>
 </Project>

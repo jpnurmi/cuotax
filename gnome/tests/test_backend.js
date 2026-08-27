@@ -1,6 +1,6 @@
 import GLib from 'gi://GLib';
 
-import {CodexBackend} from '../../src/backend.js';
+import {CodexBackend} from '../extension/backend.js';
 
 const command = GLib.getenv('CODEX_TEST_COMMAND');
 if (!command) throw new Error('CODEX_TEST_COMMAND is required');

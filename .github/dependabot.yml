@@ -2,12 +2,12 @@ version: 2
 
 updates:
   - package-ecosystem: npm
-    directory: /
+    directory: /gnome
     schedule:
       interval: weekly
 
   - package-ecosystem: swift
-    directory: /
+    directory: /macos
     schedule:
       interval: weekly
 

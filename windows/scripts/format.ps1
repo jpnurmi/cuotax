@@ -5,10 +5,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$windowsRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $projects = @(
-    (Join-Path $projectRoot "windows\CuotaX\CuotaX.csproj"),
-    (Join-Path $projectRoot "tests\CuotaX.Windows.Tests\CuotaX.Windows.Tests.csproj")
+    (Join-Path $windowsRoot "CuotaX\CuotaX.csproj"),
+    (Join-Path $windowsRoot "CuotaX.Tests\CuotaX.Tests.csproj")
 )
 
 foreach ($project in $projects) {

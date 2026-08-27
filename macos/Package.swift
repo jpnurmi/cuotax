@@ -13,7 +13,6 @@ let package = Package(
     .testTarget(
       name: "CuotaXTests",
       dependencies: ["CuotaX"],
-      path: "tests/CuotaXTests",
       resources: [.copy("Fixtures")]
     ),
   ]
