@@ -36,6 +36,7 @@ jobs:
 
       - name: Install JavaScript tools
         run: npm ci
+        working-directory: gnome
 
       - name: Lint
         run: make lint
@@ -67,6 +68,7 @@ jobs:
 
       - name: Install JavaScript tools
         run: npm ci
+        working-directory: gnome
 
       - name: Check formatting
         run: make format-check

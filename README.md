@@ -37,7 +37,7 @@ After the first installation on Wayland, log out and back in, then run
 ### Development
 
 ```bash
-npm install
+npm --prefix gnome install
 make lint
 make format-check
 make test
@@ -49,7 +49,7 @@ Test against the active Codex account:
 
 ```bash
 CODEX_TEST_COMMAND="$(command -v codex)" CODEX_TEST_LIVE=1 \
-  gjs -m tests/gjs/test_backend.js
+  gjs -m gnome/tests/test_backend.js
 ```
 
 ### Uninstall
@@ -97,20 +97,20 @@ authentication failures use a distinct `!` icon.
 Build the framework-dependent single-file executable:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1
+powershell -ExecutionPolicy Bypass -File windows/scripts/build.ps1
 ```
 
 Install to `%LOCALAPPDATA%\Programs\CuotaX`, register it to start with Windows,
 and launch it:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/install-windows.ps1
+powershell -ExecutionPolicy Bypass -File windows/scripts/install.ps1
 ```
 
 Run the Windows tests:
 
 ```powershell
-dotnet run --project tests/CuotaX.Windows.Tests/CuotaX.Windows.Tests.csproj --configuration Release
+dotnet run --project windows/CuotaX.Tests/CuotaX.Tests.csproj --configuration Release
 ```
 
 For development, launch without changing startup registration:
@@ -122,7 +122,7 @@ dotnet run --project windows/CuotaX/CuotaX.csproj -- --no-register
 Remove the startup registration and installed app:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/uninstall-windows.ps1
+powershell -ExecutionPolicy Bypass -File windows/scripts/uninstall.ps1
 ```
 
 The equivalent `make` targets are also available when GNU Make is installed.

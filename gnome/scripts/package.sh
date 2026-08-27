@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-extension_dir="$repo_dir/src"
-out_dir=${1:-"$repo_dir/dist"}
+gnome_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+repo_dir=$(cd -- "$gnome_dir/.." && pwd)
+extension_dir="$gnome_dir/extension"
+out_dir=${1:-"$repo_dir/dist/gnome"}
 
 mkdir -p "$out_dir"
 gnome-extensions pack "$extension_dir" \

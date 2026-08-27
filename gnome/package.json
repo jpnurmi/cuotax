@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "lint": "eslint src tests"
+    "format": "prettier --write .. --ignore-path ../.gitignore",
+    "format:check": "prettier --check .. --ignore-path ../.gitignore",
+    "lint": "eslint extension tests"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
