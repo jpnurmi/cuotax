@@ -83,7 +83,7 @@ Unregister the login item and remove the app:
 make uninstall
 ```
 
-The unsigned development build is ad-hoc signed locally. Distribution to other
+The development build is ad-hoc signed locally. Distribution to other
 Macs requires signing and notarization with an Apple Developer identity.
 
 The protocol and rate-limit fields are documented in the
