@@ -85,6 +85,15 @@ function windowStatus(value, window, durationMinutes, now) {
             window,
         };
     }
+    if (value.resetsAt <= now) {
+        return {
+            coverage: 0,
+            level: severity(value.usedPercent),
+            onTrackPercent: null,
+            remainingPercent,
+            window,
+        };
+    }
 
     const duration = durationMinutes * 60 * 1000;
     const timeRemaining = Math.min(1, Math.max(0, (value.resetsAt - now) / duration));

@@ -2,6 +2,7 @@
 
 using System.Drawing.Drawing2D;
 using System.Globalization;
+using System.Reflection;
 using CuotaX;
 
 if (args is ["--fixture", var fixture, ..])
@@ -165,10 +166,12 @@ static async Task TestLiveAppServerQuota()
     True(quota.FiveHour is not null || quota.Weekly is not null);
 }
 
-static CodexClient Client(string fixture, TimeSpan? timeout = null) => new(
-    new CodexCommand(Environment.ProcessPath!, new[] { "--fixture", fixture }),
-    timeout
-);
+static CodexClient Client(string fixture, TimeSpan? timeout = null)
+{
+    var assembly = Assembly.GetExecutingAssembly().Location;
+    var appHost = Path.ChangeExtension(assembly, ".exe");
+    return new CodexClient(new CodexCommand(appHost, new[] { "--fixture", fixture }), timeout);
+}
 
 static async Task RunFixture(string fixture)
 {
