@@ -13,34 +13,59 @@ permissions:
   contents: read
 
 jobs:
-  check:
-    name: ${{ matrix.name }}
+  lint:
+    name: lint (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-26.04, macos-26]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install JavaScript tools
+        run: npm ci
+
+      - name: Lint
+        run: make lint
+
+  format:
+    name: format (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-26.04, macos-26]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install JavaScript tools
+        run: npm ci
+
+      - name: Check formatting
+        run: make format-check
+
+  build:
+    name: build (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: lint
-            runner: ubuntu-26.04
-            npm: true
-            targets: lint
-          - name: format
-            runner: ubuntu-26.04
-            npm: true
-            targets: format-check
-          - name: build
-            runner: ubuntu-26.04
-            apt: gnome-shell unzip
-            targets: verify
-          - name: test
-            runner: ubuntu-26.04
-            apt: gjs
-            targets: test
-          - name: macos-26
-            runner: macos-26
-            npm: true
-            targets: format-check test verify
+          - runner: ubuntu-26.04
+            packages: gnome-shell unzip
+          - runner: macos-26
 
     steps:
       - name: Check out repository
@@ -49,18 +74,44 @@ jobs:
           persist-credentials: false
 
       - name: Install system tools
-        if: matrix.apt
+        if: matrix.packages
         env:
-          PACKAGES: ${{ matrix.apt }}
+          PACKAGES: ${{ matrix.packages }}
         run: |
           sudo apt-get update
           sudo apt-get install --yes $PACKAGES
 
-      - name: Install JavaScript tools
-        if: matrix.npm
-        run: npm ci
+      - name: Build
+        run: make build
 
-      - name: Run checks
+      - name: Verify
+        run: make verify
+
+  test:
+    name: test (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-26.04
+            packages: gjs
+          - runner: macos-26
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install system tools
+        if: matrix.packages
         env:
-          TARGETS: ${{ matrix.targets }}
-        run: make $TARGETS
+          PACKAGES: ${{ matrix.packages }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes $PACKAGES
+
+      - name: Test
+        run: make test
