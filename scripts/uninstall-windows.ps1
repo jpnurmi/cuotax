@@ -4,6 +4,11 @@ $ErrorActionPreference = "Stop"
 $programs = Join-Path $env:LOCALAPPDATA "Programs"
 $destination = Join-Path $programs "CuotaX"
 $executable = Join-Path $destination "CuotaX.exe"
+$runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+
+if (Test-Path -LiteralPath $runKey) {
+    Remove-ItemProperty -LiteralPath $runKey -Name "CuotaX" -ErrorAction SilentlyContinue
+}
 
 if (-not (Test-Path -LiteralPath $destination -PathType Container)) {
     return
