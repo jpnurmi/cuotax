@@ -2,6 +2,8 @@
 
 const FIVE_HOURS_MINUTES = 300;
 const WEEK_MINUTES = 7 * 24 * 60;
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function quotaWindow(value) {
     if (!value || !Number.isFinite(value.usedPercent)) return null;
@@ -64,12 +66,23 @@ export function formatTime(value) {
     return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function formatReset(value) {
+function formatRemaining(milliseconds) {
+    if (!(milliseconds > 0)) return null;
+
+    const minutes = milliseconds / (60 * 1000);
+    if (minutes >= 24 * 60) return `${Math.floor(minutes / (24 * 60))}d`;
+    if (minutes >= 60) return `${Math.floor(minutes / 60)}h`;
+    return `${Math.max(1, Math.floor(minutes))}m`;
+}
+
+export function formatReset(value, now = Date.now()) {
     const date = dateFrom(value);
     if (!date) return 'reset unknown';
 
-    const formatted = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-    return `resets ${formatted} ${formatTime(value)}`;
+    const formatted = `${WEEKDAYS[date.getDay()]}, ${MONTHS[date.getMonth()]} ${date.getDate()}`;
+    const remaining = formatRemaining(date.getTime() - now);
+    const suffix = remaining ? ` (${remaining})` : '';
+    return `${formatted} ${formatTime(value)}${suffix}`;
 }
 
 function windowStatus(value, window, durationMinutes, now) {

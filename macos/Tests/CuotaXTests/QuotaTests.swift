@@ -5,6 +5,29 @@ import Testing
 
 @testable import CuotaX
 
+@Test func resetFormatting() throws {
+  var calendar = Calendar(identifier: .gregorian)
+  calendar.timeZone = .current
+  let date = try #require(
+    calendar.date(from: DateComponents(year: 2026, month: 9, day: 1, hour: 13, minute: 37))
+  )
+
+  #expect(
+    formatReset(date, now: date.addingTimeInterval(-3 * 24 * 60 * 60))
+      == "Tue, Sep 1 13:37 (3d)"
+  )
+  #expect(
+    formatReset(date, now: date.addingTimeInterval(-7 * 60 * 60))
+      == "Tue, Sep 1 13:37 (7h)"
+  )
+  #expect(
+    formatReset(date, now: date.addingTimeInterval(-33 * 60))
+      == "Tue, Sep 1 13:37 (33m)"
+  )
+  #expect(formatReset(date, now: date) == "Tue, Sep 1 13:37")
+  #expect(formatReset(nil) == "reset unknown")
+}
+
 @Test func quotaPacing() throws {
   let now = Date(timeIntervalSince1970: 1_777_000_000)
   var quota = Quota(
