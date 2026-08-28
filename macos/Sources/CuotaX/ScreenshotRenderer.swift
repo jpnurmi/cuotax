@@ -123,7 +123,7 @@ enum ScreenshotRenderer {
     NSBezierPath(ovalIn: topRect(x: 207, y: y + 5, width: 8, height: 8)).fill()
     let comparison = normalizedPercent(value.usedPercent) <= status.onTrackPercent! ? "≤" : ">"
     let title =
-      "\(label)  \(formatPercent(value.usedPercent)) (\(comparison)\(formatPercent(status.onTrackPercent))) · \(formatReset(value.resetsAt))"
+      "\(label)  \(formatPercent(value.usedPercent)) (\(comparison)\(formatPercent(status.onTrackPercent))) · \(formatReset(value.resetsAt, now: now))"
     drawText(title, x: 228, y: y, size: 15, color: labelColor)
   }
 
