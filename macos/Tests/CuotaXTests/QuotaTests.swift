@@ -21,19 +21,6 @@ import Testing
   var color = try #require(paceColor(status))
   #expect(color.green > color.red)
 
-  color = try #require(
-    paceColor(
-      QuotaStatus(
-        coverage: 0.75,
-        level: .warning,
-        onTrackPercent: nil,
-        remainingPercent: nil,
-        window: nil
-      )
-    )
-  )
-  #expect(color.red == color.green)
-
   quota = Quota(
     fiveHour: QuotaWindow(usedPercent: 60, resetsAt: now.addingTimeInterval(240 * 60)),
     weekly: nil,
@@ -56,6 +43,27 @@ import Testing
   #expect(status.paceLabel == "At risk")
   color = try #require(paceColor(status))
   #expect(color.red > color.green)
+}
+
+@Test func paceColorFollowsUsageThreshold() throws {
+  func color(usage: Double, threshold: Double? = 70) throws -> PaceColor {
+    try #require(
+      paceColor(
+        QuotaStatus(
+          coverage: 1,
+          level: .normal,
+          onTrackPercent: threshold,
+          remainingPercent: 100 - usage,
+          window: nil
+        )
+      )
+    )
+  }
+
+  #expect(try color(usage: 0) == PaceColor(red: 54, green: 226, blue: 54))
+  #expect(try color(usage: 40, threshold: 40) == PaceColor(red: 226, green: 140, blue: 54))
+  #expect(try color(usage: 100) == PaceColor(red: 226, green: 54, blue: 54))
+  #expect(try color(usage: 70, threshold: nil) == PaceColor(red: 226, green: 140, blue: 54))
 }
 
 @Test func quotaChoosesTimedWindow() {
@@ -103,6 +111,22 @@ import Testing
       )
     ) == nil
   )
+}
+
+@Test func nonFiniteUsageHasNoPaceColor() {
+  for remainingPercent in [Double.nan, .infinity, -Double.infinity] {
+    #expect(
+      paceColor(
+        QuotaStatus(
+          coverage: 1,
+          level: .normal,
+          onTrackPercent: 50,
+          remainingPercent: remainingPercent,
+          window: nil
+        )
+      ) == nil
+    )
+  }
 }
 
 @Test func quotaFormattingAndSeverity() {

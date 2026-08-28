@@ -16,6 +16,13 @@ function assertEqual(actual, expected) {
         throw new Error(`Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
 }
 
+function assertColor(actual, red, green, blue) {
+    assertEqual(actual.red, red);
+    assertEqual(actual.green, green);
+    assertEqual(actual.blue, blue);
+    assertEqual(actual.alpha, 255);
+}
+
 const quota = parseQuota(
     {
         rateLimits: {
@@ -60,8 +67,15 @@ assertEqual(status.window, '5-hour');
 assertEqual(paceLabel(status), 'On track');
 let color = paceColor(status);
 assertEqual(color.green > color.red, true);
-color = paceColor({coverage: 0.75, level: 'warning'});
-assertEqual(color.red, color.green);
+assertColor(paceColor({level: 'normal', remainingPercent: 100, onTrackPercent: 40}), 54, 226, 54);
+assertColor(paceColor({level: 'warning', remainingPercent: 60, onTrackPercent: 40}), 226, 140, 54);
+assertColor(paceColor({level: 'critical', remainingPercent: 0, onTrackPercent: 40}), 226, 54, 54);
+assertColor(
+    paceColor({level: 'warning', remainingPercent: 30, onTrackPercent: null}),
+    226,
+    140,
+    54,
+);
 status = quotaStatus(
     {fiveHour: {usedPercent: 60, resetsAt: statusNow + 240 * 60 * 1000}},
     statusNow,
@@ -123,7 +137,9 @@ assertEqual(status.level, 'unavailable');
 assertEqual(status.onTrackPercent, null);
 assertEqual(paceLabel(status), 'Pace unavailable');
 assertEqual(paceColor(status), null);
-assertEqual(paceColor({coverage: 1, level: 'unavailable'}), null);
+assertEqual(paceColor({remainingPercent: 0, level: 'unavailable'}), null);
+for (const remainingPercent of [NaN, Infinity, -Infinity])
+    assertEqual(paceColor({remainingPercent, level: 'normal'}), null);
 
 const weeklyOnly = parseQuota({
     rateLimits: {

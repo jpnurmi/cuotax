@@ -86,6 +86,29 @@ static Task TestQuotaFormatting()
     }
     Equal(QuotaLevel.Warning, QuotaFormatting.Severity(70));
     Equal(QuotaLevel.Critical, QuotaFormatting.Severity(90));
+    Equal(
+        new PaceColor(54, 226, 54),
+        QuotaFormatting.Color(new QuotaStatus(1, QuotaLevel.Normal, 40, 100, null))
+    );
+    Equal(
+        new PaceColor(226, 140, 54),
+        QuotaFormatting.Color(new QuotaStatus(1, QuotaLevel.Warning, 40, 60, null))
+    );
+    Equal(
+        new PaceColor(226, 54, 54),
+        QuotaFormatting.Color(new QuotaStatus(0, QuotaLevel.Critical, 40, 0, null))
+    );
+    Equal(
+        new PaceColor(226, 140, 54),
+        QuotaFormatting.Color(new QuotaStatus(1, QuotaLevel.Warning, null, 30, null))
+    );
+    foreach (var remainingPercent in new[] { double.NaN, double.PositiveInfinity, double.NegativeInfinity })
+    {
+        Equal<PaceColor?>(
+            null,
+            QuotaFormatting.Color(new QuotaStatus(1, QuotaLevel.Normal, 50, remainingPercent, null))
+        );
+    }
     return Task.CompletedTask;
 }
 
