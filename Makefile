@@ -5,6 +5,7 @@ GNOME_ARCHIVE := dist/gnome/$(UUID).shell-extension.zip
 MACOS_DIR := macos
 MACOS_BUILD_APP := dist/macos/CuotaX.app
 WINDOWS_DIR := windows
+SCREENSHOT_DIR ?= $(CURDIR)/dist/screenshots
 ifeq ($(OS),Windows_NT)
 SYSTEM := Windows_NT
 else
@@ -22,7 +23,7 @@ PLATFORM_FORMAT := powershell.exe -NoProfile -ExecutionPolicy Bypass -File $(WIN
 PLATFORM_FORMAT_CHECK := powershell.exe -NoProfile -ExecutionPolicy Bypass -File $(WINDOWS_DIR)/scripts/format.ps1 -Check
 endif
 
-.PHONY: build disable enable format format-check install lint test uninstall verify
+.PHONY: build disable enable format format-check install lint screenshot test uninstall verify
 
 lint:
 	npm --prefix $(GNOME_DIR) run lint
@@ -42,6 +43,9 @@ build:
 
 test:
 	swift test --package-path $(MACOS_DIR)
+
+screenshot:
+	swift run --package-path $(MACOS_DIR) -c release CuotaX --screenshot "$(SCREENSHOT_DIR)/macos.png"
 
 verify: build
 	codesign --verify --deep --strict --verbose=2 $(MACOS_BUILD_APP)
@@ -81,6 +85,10 @@ test:
 	gjs -m $(GNOME_DIR)/tests/test_update.js
 	CODEX_TEST_COMMAND="$(CURDIR)/$(GNOME_DIR)/tests/fixtures/codex" gjs -m $(GNOME_DIR)/tests/test_backend.js
 
+screenshot:
+	mkdir -p "$(SCREENSHOT_DIR)"
+	TZ=UTC gjs -m $(GNOME_DIR)/scripts/screenshot.js "$(SCREENSHOT_DIR)/gnome.png"
+
 verify: build
 	unzip -t "$(GNOME_ARCHIVE)"
 
@@ -109,6 +117,9 @@ build:
 test:
 	dotnet run --project $(WINDOWS_DIR)/CuotaX.Tests/CuotaX.Tests.csproj --configuration Release
 
+screenshot:
+	dotnet run --project $(WINDOWS_DIR)/CuotaX/CuotaX.csproj --configuration Release -- --screenshot "$(SCREENSHOT_DIR)/windows.png"
+
 verify: build
 	powershell.exe -NoProfile -Command "if (-not (Test-Path -LiteralPath 'dist/windows/CuotaX.exe')) { exit 1 }"
 
@@ -124,7 +135,7 @@ enable disable:
 
 else
 
-build install test uninstall enable disable verify:
+build install test uninstall enable disable screenshot verify:
 	@echo "Unsupported platform: $(SYSTEM)" >&2
 	@exit 1
 

@@ -7,6 +7,14 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        var screenshotIndex = Array.IndexOf(args, "--screenshot");
+        if (screenshotIndex >= 0 && screenshotIndex + 1 < args.Length)
+        {
+            ApplicationConfiguration.Initialize();
+            ScreenshotRenderer.Save(args[screenshotIndex + 1]);
+            return;
+        }
+
         if (args.Contains("--unregister", StringComparer.Ordinal))
         {
             StartupRegistration.Unregister();

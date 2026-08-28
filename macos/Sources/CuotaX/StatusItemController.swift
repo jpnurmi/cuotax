@@ -171,7 +171,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
   }
 }
 
-private func statusColor(_ status: QuotaStatus) -> NSColor {
+func statusColor(_ status: QuotaStatus) -> NSColor {
   guard let color = paceColor(status) else { return .secondaryLabelColor }
   return NSColor(
     srgbRed: Double(color.red) / 255,
@@ -181,7 +181,7 @@ private func statusColor(_ status: QuotaStatus) -> NSColor {
   )
 }
 
-private func quotaImage(status: QuotaStatus, color: NSColor, updateAvailable: Bool) -> NSImage {
+func quotaImage(status: QuotaStatus, color: NSColor, updateAvailable: Bool) -> NSImage {
   let size = NSSize(width: 18, height: 18)
   let image = NSImage(size: size, flipped: false) { _ in
     let center = NSPoint(x: size.width / 2, y: size.height / 2)
