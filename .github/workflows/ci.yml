@@ -145,7 +145,7 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         run: |
           sudo apt-get update
-          sudo apt-get install --yes gjs
+          sudo apt-get install --yes gir1.2-soup-3.0 gjs
 
       - name: Test
         run: make test
