@@ -130,12 +130,24 @@ struct PaceColor: Equatable, Sendable {
 }
 
 func paceColor(_ status: QuotaStatus) -> PaceColor? {
-  guard status.level != .unavailable, let value = status.coverage, !value.isNaN else {
+  guard status.level != .unavailable, let remaining = status.remainingPercent,
+    !remaining.isNaN
+  else {
     return nil
   }
 
-  let coverage = min(1, max(0, value))
-  let hue = 120 * (1 - sqrt(1 - coverage))
+  let usage = 1 - min(100, max(0, remaining)) / 100
+  let threshold = min(1, max(0, (status.onTrackPercent ?? 70) / 100))
+  let hue: Double
+  if usage <= 0 {
+    hue = 120
+  } else if usage < threshold {
+    hue = 120 - 90 * smoothstep(usage / threshold)
+  } else if usage < 1 {
+    hue = 30 * (1 - smoothstep((usage - threshold) / (1 - threshold)))
+  } else {
+    hue = 0
+  }
   let saturation = 0.75
   let lightness = 0.55
   let chroma = (1 - abs(2 * lightness - 1)) * saturation
@@ -147,6 +159,10 @@ func paceColor(_ status: QuotaStatus) -> PaceColor? {
     green: Int(((green + offset) * 255).rounded()),
     blue: Int((offset * 255).rounded())
   )
+}
+
+private func smoothstep(_ value: Double) -> Double {
+  value * value * (3 - 2 * value)
 }
 
 func displayPercent(_ value: Double) -> Double {

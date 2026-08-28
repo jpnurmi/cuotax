@@ -149,13 +149,30 @@ internal static class QuotaFormatting
 
     internal static PaceColor? Color(QuotaStatus status)
     {
-        if (status.Level == QuotaLevel.Unavailable || status.Coverage is null || double.IsNaN(status.Coverage.Value))
+        if (status.Level == QuotaLevel.Unavailable || status.RemainingPercent is null || double.IsNaN(status.RemainingPercent.Value))
         {
             return null;
         }
 
-        var coverage = Math.Clamp(status.Coverage.Value, 0, 1);
-        var hue = 120 * (1 - Math.Sqrt(1 - coverage));
+        var usage = 1 - Math.Clamp(status.RemainingPercent.Value, 0, 100) / 100;
+        var threshold = Math.Clamp((status.OnTrackPercent ?? 70) / 100, 0, 1);
+        double hue;
+        if (usage <= 0)
+        {
+            hue = 120;
+        }
+        else if (usage < threshold)
+        {
+            hue = 120 - 90 * Smoothstep(usage / threshold);
+        }
+        else if (usage < 1)
+        {
+            hue = 30 * (1 - Smoothstep((usage - threshold) / (1 - threshold)));
+        }
+        else
+        {
+            hue = 0;
+        }
         const double saturation = 0.75;
         const double lightness = 0.55;
         var chroma = (1 - Math.Abs(2 * lightness - 1)) * saturation;
@@ -168,6 +185,8 @@ internal static class QuotaFormatting
             (int)Math.Round(offset * 255, MidpointRounding.AwayFromZero)
         );
     }
+
+    private static double Smoothstep(double value) => value * value * (3 - 2 * value);
 
     internal static string Percent(double? value)
     {

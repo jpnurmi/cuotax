@@ -135,10 +135,16 @@ export function quotaStatus(quota, now = Date.now()) {
 
 export function paceColor(status) {
     if (status.level === 'unavailable') return null;
-    if (typeof status.coverage !== 'number' || Number.isNaN(status.coverage)) return null;
+    if (typeof status.remainingPercent !== 'number' || Number.isNaN(status.remainingPercent))
+        return null;
 
-    const coverage = Math.min(1, Math.max(0, status.coverage));
-    const hue = 120 * (1 - Math.sqrt(1 - coverage));
+    const usage = 1 - Math.min(100, Math.max(0, status.remainingPercent)) / 100;
+    const threshold = Math.min(1, Math.max(0, (status.onTrackPercent ?? 70) / 100));
+    let hue;
+    if (usage <= 0) hue = 120;
+    else if (usage < threshold) hue = 120 - 90 * smoothstep(usage / threshold);
+    else if (usage < 1) hue = 30 * (1 - smoothstep((usage - threshold) / (1 - threshold)));
+    else hue = 0;
     const saturation = 0.75;
     const lightness = 0.55;
     const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
@@ -151,6 +157,10 @@ export function paceColor(status) {
         blue: Math.round(offset * 255),
         alpha: 255,
     };
+}
+
+function smoothstep(value) {
+    return value * value * (3 - 2 * value);
 }
 
 export function paceLabel(status) {
