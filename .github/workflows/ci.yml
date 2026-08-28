@@ -150,12 +150,14 @@ jobs:
       - name: Test
         run: make test
 
-  screenshots:
-    name: screenshots (${{ matrix.runner }})
+  screenshot:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - runner: ubuntu-26.04
@@ -169,7 +171,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
+          ref: ${{ github.head_ref || github.ref }}
+          fetch-depth: 0
+          persist-credentials: ${{ github.event_name == 'pull_request' }}
 
       - name: Install GNU Make
         if: ${{ runner.os == 'Windows' }}
@@ -193,48 +197,20 @@ jobs:
           LANG: en_US.UTF-8
           TZ: UTC
 
-      - name: Upload screenshot
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: screenshot-${{ matrix.platform }}
-          path: dist/screenshots/${{ matrix.platform }}.png
-          if-no-files-found: error
-
-  update-screenshots:
-    name: update screenshots
-    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
-    needs: [lint, format, build, test, screenshots]
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    permissions:
-      contents: write
-
-    steps:
-      - name: Check out pull request branch
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-          persist-credentials: true
-
-      - name: Download screenshots
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
-        with:
-          pattern: screenshot-*
-          path: dist/screenshots
-          merge-multiple: true
-
-      - name: Commit screenshots
+      - name: Commit screenshot
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PLATFORM: ${{ matrix.platform }}
         run: |
           mkdir -p .github/screenshots
-          cp dist/screenshots/*.png .github/screenshots/
-          git add .github/screenshots
+          cp "dist/screenshots/${PLATFORM}.png" .github/screenshots/
+          git add ".github/screenshots/${PLATFORM}.png"
           if git diff --cached --quiet; then
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "docs: update platform screenshots"
+          git commit -m "chore: update ${PLATFORM} screenshot"
           git push origin "HEAD:refs/heads/${HEAD_REF}"

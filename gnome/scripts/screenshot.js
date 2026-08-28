@@ -46,6 +46,18 @@ function text(cr, value, x, y, size, color, weight = Pango.Weight.NORMAL) {
     PangoCairo.show_layout(cr, layout);
 }
 
+function centeredText(cr, value, x, centerY, size, color, weight = Pango.Weight.NORMAL) {
+    const layout = PangoCairo.create_layout(cr);
+    const font = Pango.FontDescription.from_string(`Cantarell ${size}`);
+    font.set_weight(weight);
+    layout.set_font_description(font);
+    layout.set_text(value, -1);
+    const [ink] = layout.get_pixel_extents();
+    setColor(cr, color);
+    cr.moveTo(x - ink.x, Math.round(centerY - ink.y - ink.height / 2));
+    PangoCairo.show_layout(cr, layout);
+}
+
 function drawQuotaIcon(cr, x, y, status) {
     const color = paceColor(status) ?? {red: 210, green: 210, blue: 210};
     const radius = 14;
@@ -66,6 +78,44 @@ function drawQuotaIcon(cr, x, y, status) {
     cr.moveTo(x + 1.8, y + 4.4);
     cr.lineTo(x + 6.2, y + 4.4);
     cr.stroke();
+}
+
+function drawPanelStatus(cr) {
+    const color = {red: 238, green: 238, blue: 240};
+    setColor(cr, color);
+    cr.setLineWidth(2.2);
+    cr.setLineCap(Cairo.LineCap.ROUND);
+
+    cr.newSubPath();
+    cr.arc(573, 34, 10, (5 * Math.PI) / 4, (7 * Math.PI) / 4);
+    cr.stroke();
+    cr.newSubPath();
+    cr.arc(573, 34, 6, (5 * Math.PI) / 4, (7 * Math.PI) / 4);
+    cr.stroke();
+    cr.newSubPath();
+    cr.arc(573, 34, 1.5, 0, 2 * Math.PI);
+    cr.fill();
+
+    cr.moveTo(602, 27);
+    cr.lineTo(607, 27);
+    cr.lineTo(613, 22);
+    cr.lineTo(613, 42);
+    cr.lineTo(607, 37);
+    cr.lineTo(602, 37);
+    cr.closePath();
+    cr.stroke();
+    cr.newSubPath();
+    cr.arc(612, 32, 7, -Math.PI / 3, Math.PI / 3);
+    cr.stroke();
+
+    roundedRectangle(cr, 637, 23, 22, 18, 3);
+    cr.stroke();
+    cr.rectangle(660, 28, 3, 8);
+    cr.fill();
+    cr.rectangle(640, 26, 16, 12);
+    cr.fill();
+
+    centeredText(cr, '100%', 672, 32, 16, color);
 }
 
 function windowLine(cr, label, value, window, y) {
@@ -107,8 +157,8 @@ cr.setSourceRGBA(0.3, 0.3, 0.32, 0.95);
 roundedRectangle(cr, 164, 7, 154, 50, 25);
 cr.fill();
 drawQuotaIcon(cr, 198, 32, overall);
-text(cr, '68%', 223, 17, 23, overallColor, Pango.Weight.NORMAL);
-text(cr, '◉  ⌘  ◆  100%', 555, 18, 19, {red: 238, green: 238, blue: 240});
+centeredText(cr, '68%', 223, 32, 23, overallColor);
+drawPanelStatus(cr);
 
 cr.setSourceRGBA(0, 0, 0, 0.32);
 roundedRectangle(cr, 13, 81, 718, 354, 29);
