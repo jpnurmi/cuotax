@@ -14,7 +14,7 @@ internal static class TrayIconRenderer
     private static readonly Color Unavailable = Color.FromArgb(82, 82, 91);
     private static readonly Color Loading = Color.FromArgb(113, 113, 122);
 
-    internal static TrayIconVisual ForQuota(Quota quota)
+    internal static TrayIconVisual ForQuota(Quota quota, DateTimeOffset? now = null)
     {
         var highest = quota.HighestPercent ?? 0;
         if (highest >= 100)
@@ -22,7 +22,7 @@ internal static class TrayIconRenderer
             return new TrayIconVisual("×", Exhausted, Color.White);
         }
 
-        var status = quota.Status();
+        var status = quota.Status(now);
         var pace = QuotaFormatting.Color(status) ?? new PaceColor(113, 113, 122);
         var background = Color.FromArgb(pace.Red, pace.Green, pace.Blue);
         var label = Math.Min(

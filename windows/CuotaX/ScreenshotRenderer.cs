@@ -113,7 +113,7 @@ internal static class ScreenshotRenderer
         using var white = new SolidBrush(Color.White);
         graphics.DrawString("⊞", windowsFont, white, 24, 401);
 
-        var visual = TrayIconRenderer.ForQuota(Fixture);
+        var visual = TrayIconRenderer.ForQuota(Fixture, Now);
         using var icon = TrayIconRenderer.Render(visual, 32, updateAvailable: true);
         graphics.DrawImage(icon, new Rectangle(616, 400, 32, 32));
         using var clockFont = new Font("Segoe UI", 12, FontStyle.Regular, GraphicsUnit.Pixel);
