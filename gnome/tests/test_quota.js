@@ -138,6 +138,8 @@ assertEqual(status.onTrackPercent, null);
 assertEqual(paceLabel(status), 'Pace unavailable');
 assertEqual(paceColor(status), null);
 assertEqual(paceColor({remainingPercent: 0, level: 'unavailable'}), null);
+for (const remainingPercent of [NaN, Infinity, -Infinity])
+    assertEqual(paceColor({remainingPercent, level: 'normal'}), null);
 
 const weeklyOnly = parseQuota({
     rateLimits: {

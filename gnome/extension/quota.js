@@ -135,8 +135,7 @@ export function quotaStatus(quota, now = Date.now()) {
 
 export function paceColor(status) {
     if (status.level === 'unavailable') return null;
-    if (typeof status.remainingPercent !== 'number' || Number.isNaN(status.remainingPercent))
-        return null;
+    if (!Number.isFinite(status.remainingPercent)) return null;
 
     const usage = 1 - Math.min(100, Math.max(0, status.remainingPercent)) / 100;
     const threshold = Math.min(1, Math.max(0, (status.onTrackPercent ?? 70) / 100));

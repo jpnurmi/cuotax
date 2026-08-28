@@ -113,6 +113,22 @@ import Testing
   )
 }
 
+@Test func nonFiniteUsageHasNoPaceColor() {
+  for remainingPercent in [Double.nan, .infinity, -Double.infinity] {
+    #expect(
+      paceColor(
+        QuotaStatus(
+          coverage: 1,
+          level: .normal,
+          onTrackPercent: 50,
+          remainingPercent: remainingPercent,
+          window: nil
+        )
+      ) == nil
+    )
+  }
+}
+
 @Test func quotaFormattingAndSeverity() {
   #expect(displayPercent(131) == 100)
   #expect(displayPercent(-1) == 0)

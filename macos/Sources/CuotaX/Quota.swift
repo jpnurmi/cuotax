@@ -131,7 +131,7 @@ struct PaceColor: Equatable, Sendable {
 
 func paceColor(_ status: QuotaStatus) -> PaceColor? {
   guard status.level != .unavailable, let remaining = status.remainingPercent,
-    !remaining.isNaN
+    remaining.isFinite
   else {
     return nil
   }

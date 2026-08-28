@@ -149,7 +149,7 @@ internal static class QuotaFormatting
 
     internal static PaceColor? Color(QuotaStatus status)
     {
-        if (status.Level == QuotaLevel.Unavailable || status.RemainingPercent is null || double.IsNaN(status.RemainingPercent.Value))
+        if (status.Level == QuotaLevel.Unavailable || status.RemainingPercent is null || !double.IsFinite(status.RemainingPercent.Value))
         {
             return null;
         }

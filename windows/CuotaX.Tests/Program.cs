@@ -102,6 +102,13 @@ static Task TestQuotaFormatting()
         new PaceColor(226, 140, 54),
         QuotaFormatting.Color(new QuotaStatus(1, QuotaLevel.Warning, null, 30, null))
     );
+    foreach (var remainingPercent in new[] { double.NaN, double.PositiveInfinity, double.NegativeInfinity })
+    {
+        Equal<PaceColor?>(
+            null,
+            QuotaFormatting.Color(new QuotaStatus(1, QuotaLevel.Normal, 50, remainingPercent, null))
+        );
+    }
     return Task.CompletedTask;
 }
 
