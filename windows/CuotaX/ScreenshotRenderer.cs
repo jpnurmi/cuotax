@@ -2,7 +2,6 @@
 
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
-using System.Globalization;
 
 namespace CuotaX;
 
@@ -97,9 +96,9 @@ internal static class ScreenshotRenderer
         }
 
         var comparison = window.UsedPercent <= status.OnTrackPercent ? "≤" : ">";
-        var reset = window.ResetsAt!.Value.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        var reset = QuotaFormatting.Reset(window.ResetsAt, Now);
         var title =
-            $"{label}  {QuotaFormatting.Percent(window.UsedPercent)} ({comparison}{QuotaFormatting.Percent(status.OnTrackPercent)}) · resets {reset}";
+            $"{label}  {QuotaFormatting.Percent(window.UsedPercent)} ({comparison}{QuotaFormatting.Percent(status.OnTrackPercent)}) · {reset}";
         DrawText(graphics, title, 213, y, Color.FromArgb(30, 30, 30));
     }
 
