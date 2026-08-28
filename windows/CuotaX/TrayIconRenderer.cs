@@ -39,9 +39,9 @@ internal static class TrayIconRenderer
 
     internal static TrayIconVisual LoadingState() => new("…", Loading, Color.White);
 
-    internal static Icon Create(TrayIconVisual visual)
+    internal static Icon Create(TrayIconVisual visual, bool updateAvailable = false)
     {
-        using var bitmap = Render(visual, 32);
+        using var bitmap = Render(visual, 32, updateAvailable);
         var handle = bitmap.GetHicon();
         try
         {
@@ -54,7 +54,7 @@ internal static class TrayIconRenderer
         }
     }
 
-    internal static Bitmap Render(TrayIconVisual visual, int size)
+    internal static Bitmap Render(TrayIconVisual visual, int size, bool updateAvailable = false)
     {
         var bitmap = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         using var graphics = Graphics.FromImage(bitmap);
@@ -81,6 +81,14 @@ internal static class TrayIconRenderer
             FormatFlags = StringFormatFlags.NoWrap,
         };
         graphics.DrawString(visual.Label, font, textBrush, bounds, format);
+
+        if (updateAvailable)
+        {
+            var badgeSize = size * 5f / 16;
+            var badgeBounds = new RectangleF(0, size - badgeSize, badgeSize, badgeSize);
+            using var badge = new SolidBrush(Color.FromArgb(22, 136, 248));
+            graphics.FillEllipse(badge, badgeBounds);
+        }
         return bitmap;
     }
 

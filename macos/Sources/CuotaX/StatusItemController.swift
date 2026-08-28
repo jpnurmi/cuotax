@@ -26,6 +26,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         DispatchQueue.main.async { self?.render() }
       }
       .store(in: &cancellables)
+    NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)
+      .sink { [weak self] _ in
+        DispatchQueue.main.async { self?.model.refreshAfterWake() }
+      }
+      .store(in: &cancellables)
 
     LoginItem.registerIfNeeded()
     render()
@@ -54,7 +59,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     guard let button = item.button else { return }
 
     let color = statusColor(model.status)
-    button.image = quotaImage(status: model.status, color: color)
+    button.image = quotaImage(
+      status: model.status,
+      color: color,
+      updateAvailable: model.updateAvailable
+    )
     button.attributedTitle = NSAttributedString(
       string: model.title,
       attributes: [
@@ -70,10 +79,12 @@ final class StatusItemController: NSObject, NSMenuDelegate {
   }
 
   private var accessibilityLabel: String {
+    let suffix = model.updateAvailable ? ", update available" : ""
     guard model.quota != nil else {
-      return model.error.map { "CuotaX unavailable: \($0.message)" } ?? "CuotaX loading"
+      let label = model.error.map { "CuotaX unavailable: \($0.message)" } ?? "CuotaX loading"
+      return label + suffix
     }
-    return "CuotaX \(model.title), \(model.status.paceLabel.lowercased())"
+    return "CuotaX \(model.title), \(model.status.paceLabel.lowercased())" + suffix
   }
 
   private func renderMenu() {
@@ -170,7 +181,7 @@ private func statusColor(_ status: QuotaStatus) -> NSColor {
   )
 }
 
-private func quotaImage(status: QuotaStatus, color: NSColor) -> NSImage {
+private func quotaImage(status: QuotaStatus, color: NSColor, updateAvailable: Bool) -> NSImage {
   let size = NSSize(width: 18, height: 18)
   let image = NSImage(size: size, flipped: false) { _ in
     let center = NSPoint(x: size.width / 2, y: size.height / 2)
@@ -207,6 +218,11 @@ private func quotaImage(status: QuotaStatus, color: NSColor) -> NSImage {
     glyph.lineCapStyle = .round
     glyph.lineJoinStyle = .round
     glyph.stroke()
+
+    if updateAvailable {
+      NSColor(srgbRed: 22 / 255, green: 136 / 255, blue: 248 / 255, alpha: 1).setFill()
+      NSBezierPath(ovalIn: NSRect(x: 0, y: 0, width: 5, height: 5)).fill()
+    }
     return true
   }
   image.isTemplate = false

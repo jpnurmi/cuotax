@@ -11,5 +11,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="CuotaX.Windows.Tests" />
+    <AssemblyMetadata Include="BuildCommit" Value="$(SourceRevisionId)" Condition="'$(SourceRevisionId)' != ''" />
   </ItemGroup>
 </Project>
