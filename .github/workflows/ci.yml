@@ -215,3 +215,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore: update ${PLATFORM} screenshot"
           git push origin "HEAD:refs/heads/${HEAD_REF}"
+          echo "Screenshot was out of date and has been updated." >&2
+          exit 1
