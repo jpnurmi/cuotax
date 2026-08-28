@@ -16,6 +16,7 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("quota pacing", TestQuotaPacing),
     ("quota formatting", TestQuotaFormatting),
     ("tray icon states", TestTrayIconStates),
+    ("update comparison", TestUpdateComparison),
     ("app-server quota", TestAppServerQuota),
     ("app-server invalid reset", TestAppServerInvalidReset),
     ("app-server error", TestAppServerError),
@@ -139,6 +140,18 @@ static Task TestTrayIconStates()
 
     using var icon = TrayIconRenderer.Create(normal);
     True(icon.Handle != nint.Zero);
+    using var update = TrayIconRenderer.Render(normal, 32, updateAvailable: true);
+    var badge = update.GetPixel(5, 27);
+    True(badge.B > badge.R && badge.B > badge.G);
+    return Task.CompletedTask;
+}
+
+static Task TestUpdateComparison()
+{
+    True(UpdateChecker.HasUpdate("{\"ahead_by\":2}"));
+    True(!UpdateChecker.HasUpdate("{\"ahead_by\":0}"));
+    True(!UpdateChecker.HasUpdate("{\"ahead_by\":\"2\"}"));
+    True(!UpdateChecker.HasUpdate("not json"));
     return Task.CompletedTask;
 }
 

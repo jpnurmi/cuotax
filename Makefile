@@ -76,7 +76,9 @@ test:
 	node --check $(GNOME_EXTENSION_DIR)/backend.js
 	node --check $(GNOME_EXTENSION_DIR)/extension.js
 	node --check $(GNOME_EXTENSION_DIR)/quota.js
+	node --check $(GNOME_EXTENSION_DIR)/update.js
 	gjs -m $(GNOME_DIR)/tests/test_quota.js
+	gjs -m $(GNOME_DIR)/tests/test_update.js
 	CODEX_TEST_COMMAND="$(CURDIR)/$(GNOME_DIR)/tests/fixtures/codex" gjs -m $(GNOME_DIR)/tests/test_backend.js
 
 verify: build

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
@@ -11,6 +12,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import {CodexBackend} from './backend.js';
+import {UpdateChecker} from './update.js';
 import {
     displayPercent,
     formatPercent,
@@ -24,6 +26,7 @@ import {
 
 const REFRESH_SECONDS = 5 * 60;
 const OPEN_REFRESH_AGE_MS = 60 * 1000;
+const UPDATE_SECONDS = 24 * 60 * 60;
 
 function infoItem(text, styleClass = '') {
     const item = new PopupMenu.PopupMenuItem(text, {
@@ -45,12 +48,18 @@ const QuotaIcon = GObject.registerClass(
             super._init({style_class: 'cuotax-icon'});
             this._color = null;
             this._remainingPercent = null;
+            this._updateAvailable = false;
             this.connect('repaint', () => this._repaint());
         }
 
         render(status) {
             this._color = paceColor(status);
             this._remainingPercent = status.remainingPercent;
+            this.queue_repaint();
+        }
+
+        setUpdateAvailable() {
+            this._updateAvailable = true;
             this.queue_repaint();
         }
 
@@ -87,6 +96,15 @@ const QuotaIcon = GObject.registerClass(
             cr.moveTo(x + 0.8 * scale, y + 2.3 * scale);
             cr.lineTo(x + 3.1 * scale, y + 2.3 * scale);
             cr.stroke();
+
+            if (this._updateAvailable) {
+                const badgeRadius = 2.5 * scale;
+                const badgeX = x - size / 2 + badgeRadius;
+                const badgeY = y + size / 2 - badgeRadius;
+                cr.setSourceRGB(22 / 255, 136 / 255, 248 / 255);
+                cr.arc(badgeX, badgeY, badgeRadius, 0, 2 * Math.PI);
+                cr.fill();
+            }
         }
     },
 );
@@ -111,10 +129,22 @@ const CuotaXIndicator = GObject.registerClass(
                 if (open) onOpen();
             });
             this._onRefresh = onRefresh;
+            this._updateAvailable = false;
+            this._quota = null;
+            this._error = null;
             this.renderLoading();
         }
 
+        setUpdateAvailable() {
+            if (this._updateAvailable) return;
+            this._updateAvailable = true;
+            this._icon.setUpdateAvailable();
+            this._setAccessibleName(this.get_accessible_name() ?? 'CuotaX');
+        }
+
         renderLoading() {
+            this._quota = null;
+            this._error = null;
             this._label.text = '…';
             this._icon.render(quotaStatus(null));
             this.menu.removeAll();
@@ -123,6 +153,8 @@ const CuotaXIndicator = GObject.registerClass(
         }
 
         render(quota, error = null) {
+            this._quota = quota;
+            this._error = error;
             const percent = highestPercent(quota);
             const displayed = displayPercent(percent);
             const status = quotaStatus(quota);
@@ -131,7 +163,7 @@ const CuotaXIndicator = GObject.registerClass(
             this._icon.render(status);
             this._label.set_style(colorStyle(color));
             this._label.text = displayed === null ? '—' : `${Math.round(displayed)}%`;
-            this.set_accessible_name(
+            this._setAccessibleName(
                 displayed === null
                     ? 'CuotaX unavailable'
                     : `CuotaX ${Math.round(displayed)} percent, ${pace.toLowerCase()}`,
@@ -153,10 +185,12 @@ const CuotaXIndicator = GObject.registerClass(
         }
 
         renderError(error) {
+            this._quota = null;
+            this._error = error;
             this._label.text = '!';
             this._label.set_style('');
             this._icon.render(quotaStatus(null));
-            this.set_accessible_name(`CuotaX unavailable: ${error.message}`);
+            this._setAccessibleName(`CuotaX unavailable: ${error.message}`);
             this.menu.removeAll();
             this.menu.addMenuItem(infoItem(error.message, 'cuotax-error'));
             this.menu.addMenuItem(infoItem(error.diagnostic, 'cuotax-diagnostic'));
@@ -197,6 +231,11 @@ const CuotaXIndicator = GObject.registerClass(
             refresh.connect('activate', () => this._onRefresh());
             this.menu.addMenuItem(refresh);
         }
+
+        _setAccessibleName(name) {
+            const suffix = this._updateAvailable ? ', update available' : '';
+            this.set_accessible_name(`${name.replace(/, update available$/, '')}${suffix}`);
+        }
     },
 );
 
@@ -219,18 +258,42 @@ export default class CuotaXExtension extends Extension {
                 else this._indicator?.renderError(error);
             },
         );
+        this._updateChecker = new UpdateChecker(() => this._indicator?.setUpdateAvailable());
+        this._sleepSignal = Gio.DBus.system.signal_subscribe(
+            'org.freedesktop.login1',
+            'org.freedesktop.login1.Manager',
+            'PrepareForSleep',
+            '/org/freedesktop/login1',
+            null,
+            Gio.DBusSignalFlags.NONE,
+            (_connection, _sender, _path, _interface, _signal, parameters) => {
+                const [sleeping] = parameters.deepUnpack();
+                if (!sleeping) this._refreshAfterWake();
+            },
+        );
         this._timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, REFRESH_SECONDS, () => {
             this._backend.refresh();
             return GLib.SOURCE_CONTINUE;
         });
+        this._updateTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, UPDATE_SECONDS, () => {
+            this._updateChecker.check();
+            return GLib.SOURCE_CONTINUE;
+        });
         this._backend.refresh();
+        this._updateChecker.check();
     }
 
     disable() {
+        if (this._sleepSignal) Gio.DBus.system.signal_unsubscribe(this._sleepSignal);
+        this._sleepSignal = 0;
         if (this._timer) GLib.source_remove(this._timer);
         this._timer = 0;
+        if (this._updateTimer) GLib.source_remove(this._updateTimer);
+        this._updateTimer = 0;
         this._backend?.destroy();
         this._backend = null;
+        this._updateChecker?.destroy();
+        this._updateChecker = null;
         this._indicator?.destroy();
         this._indicator = null;
         this._quota = null;
@@ -239,5 +302,10 @@ export default class CuotaXExtension extends Extension {
     _refreshWhenOpened() {
         if (!this._quota || Date.now() - this._quota.updatedAt >= OPEN_REFRESH_AGE_MS)
             this._backend.refresh();
+    }
+
+    _refreshAfterWake() {
+        this._backend?.refresh();
+        this._updateChecker?.check();
     }
 }

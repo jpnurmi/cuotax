@@ -2,6 +2,7 @@
 
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using Microsoft.Win32;
 
 namespace CuotaX;
 
@@ -9,8 +10,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
 {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan OpenRefreshAge = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan UpdateInterval = TimeSpan.FromDays(1);
 
     private readonly CodexClient _client = new();
+    private readonly UpdateChecker _updateChecker = new();
     private readonly ContextMenuStrip _menu = new();
     private readonly Form _menuOwner = new()
     {
@@ -22,7 +25,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
     };
     private readonly NotifyIcon _notifyIcon = new();
     private readonly System.Windows.Forms.Timer _timer = new();
+    private readonly System.Windows.Forms.Timer _updateTimer = new();
     private readonly CancellationTokenSource _cancellation = new();
+    private readonly SynchronizationContext _uiContext;
     private Icon? _icon;
     private Quota? _quota;
     private BackendException? _error;
@@ -30,10 +35,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private bool _refreshing;
     private bool _queued;
     private bool _started;
+    private bool _updateAvailable;
     private bool _disposed;
 
     internal TrayApplicationContext(bool registerStartup)
     {
+        _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
         _menu.Opening += MenuOpening;
         _menu.Closed += MenuClosed;
         _notifyIcon.ContextMenuStrip = _menu;
@@ -43,6 +50,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _timer.Interval = (int)RefreshInterval.TotalMilliseconds;
         _timer.Tick += (_, _) => _ = RefreshAsync();
         _timer.Start();
+        _updateTimer.Interval = (int)UpdateInterval.TotalMilliseconds;
+        _updateTimer.Tick += (_, _) => _ = CheckForUpdatesAsync();
+        _updateTimer.Start();
+        SystemEvents.PowerModeChanged += PowerModeChanged;
 
         if (registerStartup)
         {
@@ -65,9 +76,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
         if (disposing)
         {
             _disposed = true;
+            SystemEvents.PowerModeChanged -= PowerModeChanged;
             Application.Idle -= Start;
             _cancellation.Cancel();
             _timer.Dispose();
+            _updateTimer.Dispose();
+            _updateChecker.Dispose();
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
             _menu.Dispose();
@@ -89,6 +103,28 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _started = true;
         Application.Idle -= Start;
         _ = RefreshAsync();
+        _ = CheckForUpdatesAsync();
+    }
+
+    private void PowerModeChanged(object sender, PowerModeChangedEventArgs eventArgs)
+    {
+        if (eventArgs.Mode != PowerModes.Resume)
+        {
+            return;
+        }
+
+        _uiContext.Post(
+            _ =>
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+                _ = RefreshAsync();
+                _ = CheckForUpdatesAsync();
+            },
+            null
+        );
     }
 
     private void MenuOpening(object? sender, CancelEventArgs eventArgs)
@@ -161,6 +197,29 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
+    private async Task CheckForUpdatesAsync()
+    {
+        try
+        {
+            if (await _updateChecker.IsUpdateAvailableAsync(_cancellation.Token))
+            {
+                if (_updateAvailable)
+                {
+                    return;
+                }
+                _updateAvailable = true;
+                Render();
+            }
+        }
+        catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+            // Update checks are best-effort and should never disturb quota reporting.
+        }
+    }
+
     private void Render()
     {
         var visual = _quota is not null
@@ -168,7 +227,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             : _error is not null || _startupError is not null
                 ? TrayIconRenderer.Error()
                 : TrayIconRenderer.LoadingState();
-        var icon = TrayIconRenderer.Create(visual);
+        var icon = TrayIconRenderer.Create(visual, _updateAvailable);
         var previous = _icon;
         _icon = icon;
         _notifyIcon.Icon = icon;
@@ -186,11 +245,15 @@ internal sealed class TrayApplicationContext : ApplicationContext
         if (_quota is not null)
         {
             var percent = QuotaFormatting.Percent(_quota.HighestPercent);
-            return Shorten($"CuotaX — {percent} used, {_quota.Status().PaceLabel.ToLowerInvariant()}");
+            var update = _updateAvailable ? ", update available" : string.Empty;
+            return Shorten(
+                $"CuotaX — {percent} used, {_quota.Status().PaceLabel.ToLowerInvariant()}{update}"
+            );
         }
 
         var error = _error ?? _startupError;
-        return Shorten(error is null ? "CuotaX — loading" : $"CuotaX unavailable — {error.Message}");
+        var label = error is null ? "CuotaX — loading" : $"CuotaX unavailable — {error.Message}";
+        return Shorten(label + (_updateAvailable ? ", update available" : string.Empty));
     }
 
     private void RenderMenu()
