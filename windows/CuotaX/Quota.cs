@@ -202,7 +202,32 @@ internal static class QuotaFormatting
 
     internal static string Time(DateTimeOffset? value) => value?.ToLocalTime().ToString("t", CultureInfo.CurrentCulture) ?? "—";
 
-    internal static string Reset(DateTimeOffset? value) => value is null
-        ? "reset unknown"
-        : $"resets {value.Value.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)}";
+    internal static string Reset(DateTimeOffset? value, DateTimeOffset? now = null)
+    {
+        if (value is null)
+        {
+            return "reset unknown";
+        }
+
+        var remaining = Remaining(value.Value - (now ?? DateTimeOffset.Now));
+        var suffix = remaining is null ? "" : $" ({remaining})";
+        return $"{value.Value.ToLocalTime().ToString("ddd, MMM d HH:mm", CultureInfo.InvariantCulture)}{suffix}";
+    }
+
+    private static string? Remaining(TimeSpan value)
+    {
+        if (value <= TimeSpan.Zero)
+        {
+            return null;
+        }
+        if (value.TotalDays >= 1)
+        {
+            return $"{(int)value.TotalDays}d";
+        }
+        if (value.TotalHours >= 1)
+        {
+            return $"{(int)value.TotalHours}h";
+        }
+        return $"{Math.Max(1, (int)value.TotalMinutes)}m";
+    }
 }

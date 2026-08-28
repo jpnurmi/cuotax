@@ -50,7 +50,17 @@ assertEqual(formatPercent(null), '—');
 const timestamp = new Date(2026, 7, 26, 9, 5).getTime();
 assertEqual(formatTime(timestamp), '09:05');
 assertEqual(formatTime(null), '—');
-assertEqual(formatReset(timestamp), 'resets 2026-08-26 09:05');
+const resetTimestamp = new Date(2026, 8, 1, 13, 37).getTime();
+assertEqual(
+    formatReset(resetTimestamp, resetTimestamp - 3 * 24 * 60 * 60 * 1000),
+    'Tue, Sep 1 13:37 (3d)',
+);
+assertEqual(
+    formatReset(resetTimestamp, resetTimestamp - 7 * 60 * 60 * 1000),
+    'Tue, Sep 1 13:37 (7h)',
+);
+assertEqual(formatReset(resetTimestamp, resetTimestamp - 33 * 60 * 1000), 'Tue, Sep 1 13:37 (33m)');
+assertEqual(formatReset(resetTimestamp, resetTimestamp), 'Tue, Sep 1 13:37');
 assertEqual(formatReset(null), 'reset unknown');
 assertEqual(severity(70), 'warning');
 assertEqual(severity(90), 'critical');

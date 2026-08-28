@@ -191,7 +191,18 @@ func formatTime(_ value: Date?) -> String {
   value?.formatted(date: .omitted, time: .shortened) ?? "—"
 }
 
-func formatReset(_ value: Date?) -> String {
-  value.map { "resets \($0.formatted(date: .numeric, time: .shortened))" }
-    ?? "reset unknown"
+func formatReset(_ value: Date?, now: Date = Date()) -> String {
+  guard let value else { return "reset unknown" }
+  let formatter = DateFormatter()
+  formatter.locale = Locale(identifier: "en_US_POSIX")
+  formatter.dateFormat = "EEE, MMM d HH:mm"
+  let suffix = formatRemaining(value.timeIntervalSince(now)).map { " (\($0))" } ?? ""
+  return "\(formatter.string(from: value))\(suffix)"
+}
+
+private func formatRemaining(_ seconds: TimeInterval) -> String? {
+  guard seconds > 0 else { return nil }
+  if seconds >= 24 * 60 * 60 { return "\(Int(seconds / (24 * 60 * 60)))d" }
+  if seconds >= 60 * 60 { return "\(Int(seconds / (60 * 60)))h" }
+  return "\(max(1, Int(seconds / 60)))m"
 }
