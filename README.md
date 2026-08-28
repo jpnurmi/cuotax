@@ -8,8 +8,6 @@ menu shows the 5-hour and weekly quotas with local reset times.
 | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | [![CuotaX in the GNOME top panel](.github/screenshots/gnome.png)](.github/screenshots/gnome.png) | [![CuotaX in the macOS menu bar](.github/screenshots/macos.png)](.github/screenshots/macos.png) | [![CuotaX in the Windows notification area](.github/screenshots/windows.png)](.github/screenshots/windows.png) |
 
-Screenshots use representative quota data and are generated on each platform by CI.
-
 Every five minutes, CuotaX reads `account/rateLimits/read` from the experimental
 Codex app-server interface using `codex app-server --stdio`. This does not start
 a model turn or consume quota.
