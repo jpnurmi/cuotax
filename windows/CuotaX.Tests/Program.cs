@@ -123,24 +123,28 @@ static Task TestQuotaFormatting()
 
 static Task TestTrayIconStates()
 {
-    var now = DateTimeOffset.Now;
-    var normal = TrayIconRenderer.ForQuota(
-        new Quota(new QuotaWindow(42, now.AddHours(2)), null, now)
-    );
+    var now = DateTimeOffset.FromUnixTimeSeconds(1_777_000_000);
+    var quota = new Quota(new QuotaWindow(42, now.AddHours(2)), null, now);
+    var normal = TrayIconRenderer.ForQuota(quota, now);
     Equal("42", normal.Label);
+    var pace = QuotaFormatting.Color(quota.Status(now))!.Value;
+    Equal(Color.FromArgb(pace.Red, pace.Green, pace.Blue), normal.Background);
 
     var nearlyFull = TrayIconRenderer.ForQuota(
-        new Quota(new QuotaWindow(99.6, now.AddMinutes(1)), null, now)
+        new Quota(new QuotaWindow(99.6, now.AddMinutes(1)), null, now),
+        now
     );
     Equal("99", nearlyFull.Label);
 
     var midpoint = TrayIconRenderer.ForQuota(
-        new Quota(new QuotaWindow(42.5, now.AddHours(2)), null, now)
+        new Quota(new QuotaWindow(42.5, now.AddHours(2)), null, now),
+        now
     );
     Equal("43", midpoint.Label);
 
     var exhausted = TrayIconRenderer.ForQuota(
-        new Quota(new QuotaWindow(100, now.AddMinutes(1)), null, now)
+        new Quota(new QuotaWindow(100, now.AddMinutes(1)), null, now),
+        now
     );
     Equal("×", exhausted.Label);
     True(exhausted.Background.R > exhausted.Background.G);

@@ -4,7 +4,9 @@ A minimal GNOME Shell extension, native macOS menu-bar app, and native Windows
 notification-area app that show the highest active Codex quota percentage. The
 menu shows the 5-hour and weekly quotas with local reset times.
 
-![CuotaX showing Codex quota usage in the GNOME top panel](.github/screenshot.png)
+| GNOME                                                                                            | macOS                                                                                           | Windows                                                                                                        |
+| ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| [![CuotaX in the GNOME top panel](.github/screenshots/gnome.png)](.github/screenshots/gnome.png) | [![CuotaX in the macOS menu bar](.github/screenshots/macos.png)](.github/screenshots/macos.png) | [![CuotaX in the Windows notification area](.github/screenshots/windows.png)](.github/screenshots/windows.png) |
 
 Every five minutes, CuotaX reads `account/rateLimits/read` from the experimental
 Codex app-server interface using `codex app-server --stdio`. This does not start

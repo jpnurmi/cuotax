@@ -6,11 +6,12 @@ export default [
     },
     js.configs.recommended,
     {
-        files: ['extension/**/*.js', 'tests/**/*.js'],
+        files: ['extension/**/*.js', 'scripts/**/*.js', 'tests/**/*.js'],
         languageOptions: {
             ecmaVersion: 'latest',
             sourceType: 'module',
             globals: {
+                ARGV: 'readonly',
                 print: 'readonly',
             },
         },
