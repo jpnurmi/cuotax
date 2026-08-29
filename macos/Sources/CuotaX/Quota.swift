@@ -28,7 +28,7 @@ func resetMessage(previous: Quota?, current: Quota) -> String? {
   let weekly = crossedReset(
     previous.weekly, previousUpdatedAt: previous.updatedAt, currentUpdatedAt: current.updatedAt)
 
-  switch (fiveHour, weekly) {
+  return switch (fiveHour, weekly) {
   case (true, true): "5-hour and weekly quotas reset"
   case (true, false): "5-hour quota reset"
   case (false, true): "Weekly quota reset"
