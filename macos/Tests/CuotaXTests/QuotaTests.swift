@@ -28,6 +28,61 @@ import Testing
   #expect(formatReset(nil) == "reset unknown")
 }
 
+@Test func resetNotification() {
+  let before = Date(timeIntervalSince1970: 1_777_000_000)
+  let reset = before.addingTimeInterval(60)
+  let after = reset.addingTimeInterval(60)
+  let previous = Quota(
+    fiveHour: QuotaWindow(usedPercent: 42, resetsAt: reset),
+    weekly: QuotaWindow(usedPercent: 7, resetsAt: reset),
+    updatedAt: before
+  )
+  let current = Quota(
+    fiveHour: QuotaWindow(usedPercent: 0, resetsAt: after.addingTimeInterval(5 * 60 * 60)),
+    weekly: QuotaWindow(usedPercent: 0, resetsAt: after.addingTimeInterval(7 * 24 * 60 * 60)),
+    updatedAt: after
+  )
+
+  #expect(resetMessage(previous: nil, current: current) == nil)
+  #expect(
+    resetMessage(
+      previous: previous,
+      current: Quota(
+        fiveHour: current.fiveHour,
+        weekly: current.weekly,
+        updatedAt: before.addingTimeInterval(30)
+      )
+    ) == nil
+  )
+  #expect(
+    resetMessage(previous: previous, current: current)
+      == "5-hour and weekly quotas reset"
+  )
+
+  let fiveHourOnly = Quota(
+    fiveHour: previous.fiveHour,
+    weekly: QuotaWindow(usedPercent: 7, resetsAt: after.addingTimeInterval(60)),
+    updatedAt: before
+  )
+  #expect(
+    resetMessage(previous: fiveHourOnly, current: current) == "5-hour quota reset"
+  )
+
+  let weeklyOnly = Quota(
+    fiveHour: nil,
+    weekly: previous.weekly,
+    updatedAt: before
+  )
+  #expect(resetMessage(previous: weeklyOnly, current: current) == "Weekly quota reset")
+
+  let alreadyExpired = Quota(
+    fiveHour: QuotaWindow(usedPercent: 42, resetsAt: before),
+    weekly: nil,
+    updatedAt: before
+  )
+  #expect(resetMessage(previous: alreadyExpired, current: current) == nil)
+}
+
 @Test func quotaPacing() throws {
   let now = Date(timeIntervalSince1970: 1_777_000_000)
   var quota = Quota(

@@ -2,14 +2,17 @@
 
 import AppKit
 import Combine
+import UserNotifications
 
 @MainActor
 final class StatusItemController: NSObject, NSMenuDelegate {
   private let model = AppModel()
+  private let notifier = ResetNotifier()
   private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
   private let menu = NSMenu()
   private var cancellables = Set<AnyCancellable>()
   private var isMenuOpen = false
+  private var observedQuota: Quota?
 
   override init() {
     super.init()
@@ -24,6 +27,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     model.objectWillChange
       .sink { [weak self] in
         DispatchQueue.main.async { self?.render() }
+      }
+      .store(in: &cancellables)
+    model.$quota
+      .compactMap(\.self)
+      .sink { [weak self] quota in
+        guard let self else { return }
+        let message = resetMessage(previous: observedQuota, current: quota)
+        observedQuota = quota
+        if let message { notifier.notify(message) }
       }
       .store(in: &cancellables)
     NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)
@@ -168,6 +180,33 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
   @objc private func quit() {
     NSApplication.shared.terminate(nil)
+  }
+}
+
+private final class ResetNotifier: NSObject, UNUserNotificationCenterDelegate {
+  private let center = UNUserNotificationCenter.current()
+
+  override init() {
+    super.init()
+    center.delegate = self
+    center.requestAuthorization(options: [.alert]) { _, _ in }
+  }
+
+  func notify(_ message: String) {
+    let content = UNMutableNotificationContent()
+    content.title = "Codex quota reset"
+    content.body = message
+    center.add(
+      UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+    )
+  }
+
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    completionHandler([.banner])
   }
 }
 

@@ -167,8 +167,14 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _refreshing = true;
         try
         {
-            _quota = await _client.ReadQuotaAsync(_cancellation.Token);
+            var quota = await _client.ReadQuotaAsync(_cancellation.Token);
+            var reset = Quota.ResetMessage(_quota, quota);
+            _quota = quota;
             _error = null;
+            if (reset is not null)
+            {
+                _notifyIcon.ShowBalloonTip(5000, "Codex quota reset", reset, ToolTipIcon.Info);
+            }
         }
         catch (BackendException error)
         {

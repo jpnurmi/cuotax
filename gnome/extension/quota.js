@@ -37,6 +37,22 @@ export function highestPercent(quota) {
     return values.length === 0 ? null : Math.max(...values);
 }
 
+export function resetMessage(previous, current) {
+    if (!previous) return null;
+
+    const crossedReset = (window) =>
+        Number.isFinite(window?.resetsAt) &&
+        previous.updatedAt < window.resetsAt &&
+        window.resetsAt <= current.updatedAt;
+    const fiveHour = crossedReset(previous.fiveHour);
+    const weekly = crossedReset(previous.weekly);
+
+    if (fiveHour && weekly) return '5-hour and weekly quotas reset';
+    if (fiveHour) return '5-hour quota reset';
+    if (weekly) return 'Weekly quota reset';
+    return null;
+}
+
 export function displayPercent(value) {
     return Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : null;
 }

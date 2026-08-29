@@ -15,6 +15,7 @@ var tests = new List<(string Name, Func<Task> Run)>
 {
     ("quota pacing", TestQuotaPacing),
     ("quota formatting", TestQuotaFormatting),
+    ("reset notification", TestResetNotification),
     ("tray icon states", TestTrayIconStates),
     ("update comparison", TestUpdateComparison),
     ("app-server quota", TestAppServerQuota),
@@ -118,6 +119,46 @@ static Task TestQuotaFormatting()
             QuotaFormatting.Color(new QuotaStatus(1, QuotaLevel.Normal, 50, remainingPercent, null))
         );
     }
+    return Task.CompletedTask;
+}
+
+static Task TestResetNotification()
+{
+    var before = DateTimeOffset.FromUnixTimeSeconds(1_777_000_000);
+    var reset = before.AddMinutes(1);
+    var after = reset.AddMinutes(1);
+    var previous = new Quota(
+        new QuotaWindow(42, reset),
+        new QuotaWindow(7, reset),
+        before
+    );
+    var current = new Quota(
+        new QuotaWindow(0, after.AddHours(5)),
+        new QuotaWindow(0, after.AddDays(7)),
+        after
+    );
+
+    Equal<string?>(null, Quota.ResetMessage(null, current));
+    Equal<string?>(
+        null,
+        Quota.ResetMessage(previous, current with { UpdatedAt = before.AddSeconds(30) })
+    );
+    Equal("5-hour and weekly quotas reset", Quota.ResetMessage(previous, current));
+    Equal(
+        "5-hour quota reset",
+        Quota.ResetMessage(previous with { Weekly = null }, current)
+    );
+    Equal(
+        "Weekly quota reset",
+        Quota.ResetMessage(previous with { FiveHour = null }, current)
+    );
+    Equal<string?>(
+        null,
+        Quota.ResetMessage(
+            new Quota(new QuotaWindow(42, before), null, before),
+            current
+        )
+    );
     return Task.CompletedTask;
 }
 
