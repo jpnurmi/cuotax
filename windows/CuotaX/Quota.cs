@@ -20,6 +20,24 @@ internal sealed record Quota(QuotaWindow? FiveHour, QuotaWindow? Weekly, DateTim
         }
     }
 
+    internal static string? ResetMessage(Quota? previous, Quota current)
+    {
+        if (previous is null)
+        {
+            return null;
+        }
+
+        var fiveHour = CrossedReset(previous.FiveHour, previous.UpdatedAt, current.UpdatedAt);
+        var weekly = CrossedReset(previous.Weekly, previous.UpdatedAt, current.UpdatedAt);
+        return (fiveHour, weekly) switch
+        {
+            (true, true) => "5-hour and weekly quotas reset",
+            (true, false) => "5-hour quota reset",
+            (false, true) => "Weekly quota reset",
+            _ => null,
+        };
+    }
+
     internal QuotaStatus Status(DateTimeOffset? now = null)
     {
         var current = now ?? DateTimeOffset.Now;
@@ -95,6 +113,14 @@ internal sealed record Quota(QuotaWindow? FiveHour, QuotaWindow? Weekly, DateTim
             new QuotaStatus(coverage, level, onTrackPercent, remainingPercent, window)
         );
     }
+
+    private static bool CrossedReset(
+        QuotaWindow? window,
+        DateTimeOffset previousUpdatedAt,
+        DateTimeOffset currentUpdatedAt
+    ) => window?.ResetsAt is { } resetsAt
+        && previousUpdatedAt < resetsAt
+        && resetsAt <= currentUpdatedAt;
 
     private sealed record RankedStatus(double Coverage, QuotaStatus Status);
 }

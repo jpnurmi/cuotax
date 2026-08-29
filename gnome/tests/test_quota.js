@@ -8,6 +8,7 @@ import {
     paceLabel,
     parseQuota,
     quotaStatus,
+    resetMessage,
     severity,
 } from '../extension/quota.js';
 
@@ -62,6 +63,35 @@ assertEqual(
 assertEqual(formatReset(resetTimestamp, resetTimestamp - 33 * 60 * 1000), 'Tue, Sep 1 13:37 (33m)');
 assertEqual(formatReset(resetTimestamp, resetTimestamp), 'Tue, Sep 1 13:37');
 assertEqual(formatReset(null), 'reset unknown');
+const beforeReset = 1_777_000_000_000;
+const resetAt = beforeReset + 60_000;
+const afterReset = resetAt + 60_000;
+const previousQuota = {
+    fiveHour: {usedPercent: 42, resetsAt: resetAt},
+    weekly: {usedPercent: 7, resetsAt: resetAt},
+    updatedAt: beforeReset,
+};
+const currentQuota = {
+    fiveHour: {usedPercent: 0, resetsAt: afterReset + 5 * 60 * 60 * 1000},
+    weekly: {usedPercent: 0, resetsAt: afterReset + 7 * 24 * 60 * 60 * 1000},
+    updatedAt: afterReset,
+};
+assertEqual(resetMessage(null, currentQuota), null);
+assertEqual(resetMessage(previousQuota, {...currentQuota, updatedAt: beforeReset + 30_000}), null);
+assertEqual(resetMessage(previousQuota, currentQuota), '5-hour and weekly quotas reset');
+assertEqual(resetMessage({...previousQuota, weekly: null}, currentQuota), '5-hour quota reset');
+assertEqual(resetMessage({...previousQuota, fiveHour: null}, currentQuota), 'Weekly quota reset');
+assertEqual(
+    resetMessage(
+        {
+            fiveHour: {usedPercent: 42, resetsAt: beforeReset},
+            weekly: null,
+            updatedAt: beforeReset,
+        },
+        currentQuota,
+    ),
+    null,
+);
 assertEqual(severity(70), 'warning');
 assertEqual(severity(90), 'critical');
 

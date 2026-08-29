@@ -10,7 +10,8 @@ menu shows the 5-hour and weekly quotas with local reset times.
 
 Every five minutes, CuotaX reads `account/rateLimits/read` from the experimental
 Codex app-server interface using `codex app-server --stdio`. This does not start
-a model turn or consume quota.
+a model turn or consume quota. CuotaX sends a desktop notification when a known
+5-hour or weekly quota window resets.
 
 ## Requirements
 

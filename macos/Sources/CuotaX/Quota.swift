@@ -20,6 +20,29 @@ struct Quota: Equatable, Sendable {
   }
 }
 
+func resetMessage(previous: Quota?, current: Quota) -> String? {
+  guard let previous else { return nil }
+
+  let fiveHour = crossedReset(
+    previous.fiveHour, previousUpdatedAt: previous.updatedAt, currentUpdatedAt: current.updatedAt)
+  let weekly = crossedReset(
+    previous.weekly, previousUpdatedAt: previous.updatedAt, currentUpdatedAt: current.updatedAt)
+
+  switch (fiveHour, weekly) {
+  case (true, true): "5-hour and weekly quotas reset"
+  case (true, false): "5-hour quota reset"
+  case (false, true): "Weekly quota reset"
+  case (false, false): nil
+  }
+}
+
+private func crossedReset(
+  _ window: QuotaWindow?, previousUpdatedAt: Date, currentUpdatedAt: Date
+) -> Bool {
+  guard let resetsAt = window?.resetsAt else { return false }
+  return previousUpdatedAt < resetsAt && resetsAt <= currentUpdatedAt
+}
+
 enum QuotaLevel: Sendable {
   case normal
   case warning

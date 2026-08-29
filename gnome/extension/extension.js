@@ -22,6 +22,7 @@ import {
     paceColor,
     paceLabel,
     quotaStatus,
+    resetMessage,
 } from './quota.js';
 
 const REFRESH_SECONDS = 5 * 60;
@@ -250,8 +251,10 @@ export default class CuotaXExtension extends Extension {
 
         this._backend = new CodexBackend(
             (quota) => {
+                const message = resetMessage(this._quota, quota);
                 this._quota = quota;
                 this._indicator?.render(quota);
+                if (message) Main.notify('Codex quota reset', message);
             },
             (error) => {
                 if (this._quota) this._indicator?.render(this._quota, error);
