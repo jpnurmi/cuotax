@@ -23,7 +23,22 @@ PLATFORM_FORMAT := powershell.exe -NoProfile -ExecutionPolicy Bypass -File $(WIN
 PLATFORM_FORMAT_CHECK := powershell.exe -NoProfile -ExecutionPolicy Bypass -File $(WINDOWS_DIR)/scripts/format.ps1 -Check
 endif
 
-.PHONY: build disable enable format format-check install lint screenshot test uninstall verify
+.PHONY: build disable enable format format-check help install lint screenshot test uninstall verify
+
+help:
+	@printf '%s\n' \
+		'CuotaX targets:' \
+		'  install       Build and install CuotaX' \
+		'  uninstall     Remove CuotaX' \
+		'  build         Build CuotaX' \
+		'  test          Run tests' \
+		'  lint          Run the linter' \
+		'  format        Format source files' \
+		'  format-check  Check source formatting' \
+		'  verify        Verify the build' \
+		'  screenshot    Capture a screenshot' \
+		'  enable        Enable the GNOME Shell extension' \
+		'  disable       Disable the GNOME Shell extension'
 
 lint:
 	npm --prefix $(GNOME_DIR) run lint
