@@ -37,6 +37,13 @@ export function highestPercent(quota) {
     return values.length === 0 ? null : Math.max(...values);
 }
 
+export function nextReset(quota, now = Date.now()) {
+    const resets = [quota?.fiveHour?.resetsAt, quota?.weekly?.resetsAt].filter(
+        (value) => Number.isFinite(value) && value > now,
+    );
+    return resets.length === 0 ? null : Math.min(...resets);
+}
+
 export function resetMessage(previous, current) {
     if (!previous) return null;
 
@@ -110,6 +117,7 @@ function windowStatus(value, window, durationMinutes, now) {
             coverage: remainingPercent / 100,
             level: severity(value.usedPercent),
             onTrackPercent: null,
+            paceProgress: null,
             remainingPercent,
             window,
         };
@@ -119,19 +127,46 @@ function windowStatus(value, window, durationMinutes, now) {
             coverage: 0,
             level: severity(value.usedPercent),
             onTrackPercent: null,
+            paceProgress: null,
             remainingPercent,
             window,
         };
     }
 
     const duration = durationMinutes * 60 * 1000;
-    const timeRemaining = Math.min(1, Math.max(0, (value.resetsAt - now) / duration));
-    const onTrackPercent = Math.round(1000 * (1 - timeRemaining)) / 10;
-    const coverage = timeRemaining === 0 ? Infinity : remainingPercent / 100 / timeRemaining;
+    const targetEnd =
+        durationMinutes === WEEK_MINUTES
+            ? Math.min(
+                  new Date(
+                      new Date(now).getFullYear(),
+                      new Date(now).getMonth(),
+                      new Date(now).getDate() + 1,
+                  ).getTime(),
+                  value.resetsAt,
+              )
+            : now;
+    const targetTimeRemaining = Math.min(1, Math.max(0, (value.resetsAt - targetEnd) / duration));
+    const actualTimeRemaining = Math.min(1, Math.max(0, (value.resetsAt - now) / duration));
+    const targetPercent = 100 * (1 - targetTimeRemaining);
+    const onTrackPercent = Math.round(10 * targetPercent) / 10;
     const usedPercent = Math.round(displayPercent(value.usedPercent) * 10) / 10;
+    let paceProgress = null;
+    if (durationMinutes === WEEK_MINUTES) {
+        const startOfDay = new Date(now);
+        startOfDay.setHours(0, 0, 0, 0);
+        const startTimeRemaining = Math.min(
+            1,
+            Math.max(0, (value.resetsAt - startOfDay.getTime()) / duration),
+        );
+        const startPercent = 100 * (1 - startTimeRemaining);
+        const allowance = targetPercent - startPercent;
+        if (allowance > 0) paceProgress = (usedPercent - startPercent) / allowance;
+    }
+    const coverage =
+        actualTimeRemaining === 0 ? Infinity : remainingPercent / 100 / actualTimeRemaining;
     const level =
         usedPercent <= onTrackPercent ? 'normal' : coverage < 0.5 ? 'critical' : 'warning';
-    return {coverage, level, onTrackPercent, remainingPercent, window};
+    return {coverage, level, onTrackPercent, paceProgress, remainingPercent, window};
 }
 
 export function quotaStatus(quota, now = Date.now()) {
@@ -144,6 +179,7 @@ export function quotaStatus(quota, now = Date.now()) {
             coverage: null,
             level: 'unavailable',
             onTrackPercent: null,
+            paceProgress: null,
             remainingPercent: null,
             window: null,
         };
@@ -157,6 +193,7 @@ export function quotaStatus(quota, now = Date.now()) {
         coverage: status.coverage,
         level: status.level,
         onTrackPercent: status.onTrackPercent,
+        paceProgress: status.paceProgress,
         remainingPercent: status.remainingPercent,
         window: status.window,
     };
@@ -169,7 +206,9 @@ export function paceColor(status) {
     const usage = 1 - Math.min(100, Math.max(0, status.remainingPercent)) / 100;
     const threshold = Math.min(1, Math.max(0, (status.onTrackPercent ?? 70) / 100));
     let hue;
-    if (usage <= 0) hue = 120;
+    if (Number.isFinite(status.paceProgress) && usage <= threshold)
+        hue = 120 - 90 * smoothstep(Math.min(1, Math.max(0, status.paceProgress)));
+    else if (usage <= 0) hue = 120;
     else if (usage < threshold) hue = 120 - 90 * smoothstep(usage / threshold);
     else if (usage < 1) hue = 30 * (1 - smoothstep((usage - threshold) / (1 - threshold)));
     else hue = 0;

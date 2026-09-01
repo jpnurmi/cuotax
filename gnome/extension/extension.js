@@ -19,6 +19,7 @@ import {
     formatReset,
     formatTime,
     highestPercent,
+    nextReset,
     paceColor,
     paceLabel,
     quotaStatus,
@@ -253,6 +254,7 @@ export default class CuotaXExtension extends Extension {
             (quota) => {
                 const message = resetMessage(this._quota, quota);
                 this._quota = quota;
+                this._scheduleResetRefresh(quota);
                 this._indicator?.render(quota);
                 if (message) Main.notify('Codex quota reset', message);
             },
@@ -293,6 +295,8 @@ export default class CuotaXExtension extends Extension {
         this._timer = 0;
         if (this._updateTimer) GLib.source_remove(this._updateTimer);
         this._updateTimer = 0;
+        if (this._resetTimer) GLib.source_remove(this._resetTimer);
+        this._resetTimer = 0;
         this._backend?.destroy();
         this._backend = null;
         this._updateChecker?.destroy();
@@ -310,5 +314,18 @@ export default class CuotaXExtension extends Extension {
     _refreshAfterWake() {
         this._backend?.refresh();
         this._updateChecker?.check();
+    }
+
+    _scheduleResetRefresh(quota) {
+        if (this._resetTimer) GLib.source_remove(this._resetTimer);
+        this._resetTimer = 0;
+        const reset = nextReset(quota);
+        if (reset === null) return;
+        const seconds = Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+        this._resetTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, seconds, () => {
+            this._resetTimer = 0;
+            this._backend?.refresh();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 }

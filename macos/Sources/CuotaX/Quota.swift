@@ -18,6 +18,13 @@ struct Quota: Equatable, Sendable {
   var highestPercent: Double? {
     [fiveHour, weekly].compactMap(\.self).map(\.usedPercent).max()
   }
+
+  func nextReset(after now: Date = Date()) -> Date? {
+    [fiveHour?.resetsAt, weekly?.resetsAt]
+      .compactMap(\.self)
+      .filter { $0 > now }
+      .min()
+  }
 }
 
 func resetMessage(previous: Quota?, current: Quota) -> String? {
@@ -54,6 +61,7 @@ struct QuotaStatus: Sendable {
   let coverage: Double?
   let level: QuotaLevel
   let onTrackPercent: Double?
+  let paceProgress: Double?
   let remainingPercent: Double?
   let window: String?
 
@@ -81,6 +89,7 @@ extension Quota {
         coverage: nil,
         level: .unavailable,
         onTrackPercent: nil,
+        paceProgress: nil,
         remainingPercent: nil,
         window: nil
       )
@@ -115,6 +124,7 @@ private func windowStatus(
         coverage: remainingPercent / 100,
         level: severity(usedPercent),
         onTrackPercent: nil,
+        paceProgress: nil,
         remainingPercent: remainingPercent,
         window: name
       )
@@ -122,9 +132,39 @@ private func windowStatus(
   }
 
   let duration = Double(durationMinutes * 60)
-  let timeRemaining = min(1, max(0, resetsAt.timeIntervalSince(now) / duration))
-  let onTrackPercent = (1000 * (1 - timeRemaining)).rounded() / 10
-  let coverage = remainingPercent / 100 / timeRemaining
+  let targetEnd =
+    if durationMinutes == weeklyWindowDurationMinutes {
+      min(
+        Calendar.current.date(
+          byAdding: .day,
+          value: 1,
+          to: Calendar.current.startOfDay(for: now)
+        )!,
+        resetsAt
+      )
+    } else {
+      now
+    }
+  let targetTimeRemaining = min(1, max(0, resetsAt.timeIntervalSince(targetEnd) / duration))
+  let actualTimeRemaining = min(1, max(0, resetsAt.timeIntervalSince(now) / duration))
+  let targetPercent = 100 * (1 - targetTimeRemaining)
+  let onTrackPercent = (targetPercent * 10).rounded() / 10
+  let paceProgress =
+    if durationMinutes == weeklyWindowDurationMinutes {
+      let startTimeRemaining = min(
+        1,
+        max(
+          0,
+          resetsAt.timeIntervalSince(Calendar.current.startOfDay(for: now)) / duration
+        )
+      )
+      let startPercent = 100 * (1 - startTimeRemaining)
+      let allowance = targetPercent - startPercent
+      allowance > 0 ? (usedPercent - startPercent) / allowance : nil
+    } else {
+      nil
+    }
+  let coverage = remainingPercent / 100 / actualTimeRemaining
   let level: QuotaLevel =
     if usedPercent <= onTrackPercent {
       .normal
@@ -140,6 +180,7 @@ private func windowStatus(
       coverage: coverage,
       level: level,
       onTrackPercent: onTrackPercent,
+      paceProgress: paceProgress,
       remainingPercent: remainingPercent,
       window: name
     )
@@ -162,7 +203,9 @@ func paceColor(_ status: QuotaStatus) -> PaceColor? {
   let usage = 1 - min(100, max(0, remaining)) / 100
   let threshold = min(1, max(0, (status.onTrackPercent ?? 70) / 100))
   let hue: Double
-  if usage <= 0 {
+  if let progress = status.paceProgress, progress.isFinite, usage <= threshold {
+    hue = 120 - 90 * smoothstep(min(1, max(0, progress)))
+  } else if usage <= 0 {
     hue = 120
   } else if usage < threshold {
     hue = 120 - 90 * smoothstep(usage / threshold)
