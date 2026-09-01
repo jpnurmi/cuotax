@@ -149,21 +149,21 @@ private func windowStatus(
   let actualTimeRemaining = min(1, max(0, resetsAt.timeIntervalSince(now) / duration))
   let targetPercent = 100 * (1 - targetTimeRemaining)
   let onTrackPercent = (targetPercent * 10).rounded() / 10
-  let paceProgress =
-    if durationMinutes == weeklyWindowDurationMinutes {
-      let startTimeRemaining = min(
-        1,
-        max(
-          0,
-          resetsAt.timeIntervalSince(Calendar.current.startOfDay(for: now)) / duration
-        )
+  let paceProgress: Double?
+  if durationMinutes == weeklyWindowDurationMinutes {
+    let startTimeRemaining = min(
+      1,
+      max(
+        0,
+        resetsAt.timeIntervalSince(Calendar.current.startOfDay(for: now)) / duration
       )
-      let startPercent = 100 * (1 - startTimeRemaining)
-      let allowance = targetPercent - startPercent
-      allowance > 0 ? (usedPercent - startPercent) / allowance : nil
-    } else {
-      nil
-    }
+    )
+    let startPercent = 100 * (1 - startTimeRemaining)
+    let allowance = targetPercent - startPercent
+    paceProgress = allowance > 0 ? (usedPercent - startPercent) / allowance : nil
+  } else {
+    paceProgress = nil
+  }
   let coverage = remainingPercent / 100 / actualTimeRemaining
   let level: QuotaLevel =
     if usedPercent <= onTrackPercent {
