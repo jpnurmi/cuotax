@@ -38,6 +38,14 @@ internal sealed record Quota(QuotaWindow? FiveHour, QuotaWindow? Weekly, DateTim
         };
     }
 
+    internal DateTimeOffset? NextReset(DateTimeOffset? now = null)
+    {
+        var current = now ?? DateTimeOffset.Now;
+        return new[] { FiveHour?.ResetsAt, Weekly?.ResetsAt }
+            .Where(value => value > current)
+            .Min();
+    }
+
     internal QuotaStatus Status(DateTimeOffset? now = null)
     {
         var current = now ?? DateTimeOffset.Now;
@@ -87,6 +95,7 @@ internal sealed record Quota(QuotaWindow? FiveHour, QuotaWindow? Weekly, DateTim
                     untimedCoverage,
                     QuotaFormatting.Severity(usedPercent),
                     null,
+                    null,
                     remainingPercent,
                     window
                 )
@@ -94,14 +103,42 @@ internal sealed record Quota(QuotaWindow? FiveHour, QuotaWindow? Weekly, DateTim
         }
 
         var duration = TimeSpan.FromMinutes(durationMinutes).TotalSeconds;
-        var timeRemaining = Math.Clamp((value.ResetsAt.Value - now).TotalSeconds / duration, 0, 1);
+        var targetEnd = durationMinutes == QuotaFormatting.WeeklyMinutes
+            ? new[] { NextLocalMidnight(now), value.ResetsAt.Value }.Min()
+            : now;
+        var targetTimeRemaining = Math.Clamp(
+            (value.ResetsAt.Value - targetEnd).TotalSeconds / duration,
+            0,
+            1
+        );
+        var actualTimeRemaining = Math.Clamp(
+            (value.ResetsAt.Value - now).TotalSeconds / duration,
+            0,
+            1
+        );
+        var targetPercent = 100 * (1 - targetTimeRemaining);
         var onTrackPercent = Math.Round(
-            1000 * (1 - timeRemaining),
+            10 * targetPercent,
             MidpointRounding.AwayFromZero
         ) / 10;
-        var coverage = timeRemaining == 0
+        double? paceProgress = null;
+        if (durationMinutes == QuotaFormatting.WeeklyMinutes)
+        {
+            var startTimeRemaining = Math.Clamp(
+                (value.ResetsAt.Value - StartOfLocalDay(now)).TotalSeconds / duration,
+                0,
+                1
+            );
+            var startPercent = 100 * (1 - startTimeRemaining);
+            var allowance = targetPercent - startPercent;
+            if (allowance > 0)
+            {
+                paceProgress = (usedPercent - startPercent) / allowance;
+            }
+        }
+        var coverage = actualTimeRemaining == 0
             ? double.PositiveInfinity
-            : remainingPercent / 100 / timeRemaining;
+            : remainingPercent / 100 / actualTimeRemaining;
         var level = usedPercent <= onTrackPercent
             ? QuotaLevel.Normal
             : coverage < 0.5
@@ -110,7 +147,7 @@ internal sealed record Quota(QuotaWindow? FiveHour, QuotaWindow? Weekly, DateTim
 
         return new RankedStatus(
             coverage,
-            new QuotaStatus(coverage, level, onTrackPercent, remainingPercent, window)
+            new QuotaStatus(coverage, level, onTrackPercent, paceProgress, remainingPercent, window)
         );
     }
 
@@ -121,6 +158,19 @@ internal sealed record Quota(QuotaWindow? FiveHour, QuotaWindow? Weekly, DateTim
     ) => window?.ResetsAt is { } resetsAt
         && previousUpdatedAt < resetsAt
         && resetsAt <= currentUpdatedAt;
+
+    private static DateTimeOffset NextLocalMidnight(DateTimeOffset now)
+        => LocalMidnight(now, 1);
+
+    private static DateTimeOffset StartOfLocalDay(DateTimeOffset now)
+        => LocalMidnight(now, 0);
+
+    private static DateTimeOffset LocalMidnight(DateTimeOffset now, int days)
+    {
+        var local = TimeZoneInfo.ConvertTime(now, TimeZoneInfo.Local);
+        var midnight = DateTime.SpecifyKind(local.Date.AddDays(days), DateTimeKind.Unspecified);
+        return new DateTimeOffset(midnight, TimeZoneInfo.Local.GetUtcOffset(midnight));
+    }
 
     private sealed record RankedStatus(double Coverage, QuotaStatus Status);
 }
@@ -137,11 +187,19 @@ internal sealed record QuotaStatus(
     double? Coverage,
     QuotaLevel Level,
     double? OnTrackPercent,
+    double? PaceProgress,
     double? RemainingPercent,
     string? Window
 )
 {
-    internal static QuotaStatus Unavailable { get; } = new(null, QuotaLevel.Unavailable, null, null, null);
+    internal static QuotaStatus Unavailable { get; } = new(
+        null,
+        QuotaLevel.Unavailable,
+        null,
+        null,
+        null,
+        null
+    );
 
     internal string PaceLabel => Level switch
     {
@@ -183,7 +241,11 @@ internal static class QuotaFormatting
         var usage = 1 - Math.Clamp(status.RemainingPercent.Value, 0, 100) / 100;
         var threshold = Math.Clamp((status.OnTrackPercent ?? 70) / 100, 0, 1);
         double hue;
-        if (usage <= 0)
+        if (status.PaceProgress is { } progress && double.IsFinite(progress) && usage <= threshold)
+        {
+            hue = 120 - 90 * Smoothstep(Math.Clamp(progress, 0, 1));
+        }
+        else if (usage <= 0)
         {
             hue = 120;
         }

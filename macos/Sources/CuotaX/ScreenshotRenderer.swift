@@ -75,7 +75,7 @@ enum ScreenshotRenderer {
 
     let overall = quota.status(now: now)
     let color = statusColor(overall)
-    let icon = quotaImage(status: overall, color: color, updateAvailable: true)
+    let icon = quotaImage(status: overall, color: color, updateAvailable: false)
     icon.draw(in: topRect(x: 477, y: 9, width: 18, height: 18))
     drawText("68%", x: 501, y: 9, size: 14, color: color)
 

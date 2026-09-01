@@ -4,6 +4,7 @@ import {
     formatReset,
     formatTime,
     highestPercent,
+    nextReset,
     paceColor,
     paceLabel,
     parseQuota,
@@ -81,6 +82,8 @@ assertEqual(resetMessage(previousQuota, {...currentQuota, updatedAt: beforeReset
 assertEqual(resetMessage(previousQuota, currentQuota), '5-hour and weekly quotas reset');
 assertEqual(resetMessage({...previousQuota, weekly: null}, currentQuota), '5-hour quota reset');
 assertEqual(resetMessage({...previousQuota, fiveHour: null}, currentQuota), 'Weekly quota reset');
+assertEqual(nextReset(previousQuota, beforeReset), resetAt);
+assertEqual(nextReset(previousQuota, resetAt), null);
 assertEqual(
     resetMessage(
         {
@@ -116,6 +119,13 @@ assertColor(
     140,
     54,
 );
+color = paceColor({
+    level: 'normal',
+    remainingPercent: 85,
+    onTrackPercent: 23.2,
+    paceProgress: (15 - 14.6) / (23.2 - 14.6),
+});
+assertEqual(color.green > color.red, true);
 status = quotaStatus(
     {fiveHour: {usedPercent: 60, resetsAt: statusNow + 240 * 60 * 1000}},
     statusNow,
@@ -149,10 +159,23 @@ status = quotaStatus(
     statusNow,
 );
 assertEqual(status.level, 'critical');
-status = quotaStatus({weekly: {usedPercent: 90, resetsAt: statusNow + 60 * 60 * 1000}}, statusNow);
+const weeklyReset = new Date(2026, 8, 1, 14).getTime();
+status = quotaStatus({weekly: {usedPercent: 6, resetsAt: weeklyReset}}, statusNow);
 assertEqual(status.level, 'normal');
 assertEqual(status.window, 'weekly');
-assertEqual(Math.round(status.onTrackPercent * 10) / 10, 99.4);
+assertEqual(status.onTrackPercent, 20.2);
+assertEqual(status.paceProgress < 0.01, true);
+color = paceColor(status);
+assertEqual(color.green > color.red, true);
+const finalDay = new Date(2026, 8, 1, 12).getTime();
+status = quotaStatus({weekly: {usedPercent: 99, resetsAt: weeklyReset}}, finalDay);
+assertEqual(status.onTrackPercent, 100);
+const afterResetTime = new Date(2026, 8, 1, 15).getTime();
+status = quotaStatus(
+    {weekly: {usedPercent: 5, resetsAt: weeklyReset + 7 * 24 * 60 * 60 * 1000}},
+    afterResetTime,
+);
+assertEqual(status.onTrackPercent, 6);
 status = quotaStatus(
     {
         fiveHour: {usedPercent: 10, resetsAt: null},
@@ -161,7 +184,7 @@ status = quotaStatus(
     statusNow,
 );
 assertEqual(status.window, 'weekly');
-assertEqual(status.onTrackPercent, 50);
+assertEqual(status.onTrackPercent, 57.1);
 status = quotaStatus({fiveHour: {usedPercent: 75, resetsAt: null}}, statusNow);
 assertEqual(status.level, 'warning');
 assertEqual(status.window, '5-hour');

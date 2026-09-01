@@ -81,6 +81,8 @@ import Testing
     updatedAt: before
   )
   #expect(resetMessage(previous: alreadyExpired, current: current) == nil)
+  #expect(previous.nextReset(after: before) == reset)
+  #expect(previous.nextReset(after: reset) == nil)
 }
 
 @Test func quotaPacing() throws {
@@ -123,6 +125,51 @@ import Testing
   #expect(color.red > color.green)
 }
 
+@Test func weeklyPacingUsesEndOfDay() throws {
+  var calendar = Calendar(identifier: .gregorian)
+  calendar.timeZone = .current
+  let now = try #require(
+    calendar.date(from: DateComponents(year: 2026, month: 8, day: 26, hour: 12))
+  )
+  let reset = try #require(
+    calendar.date(from: DateComponents(year: 2026, month: 9, day: 1, hour: 14))
+  )
+
+  var status = Quota(
+    fiveHour: nil,
+    weekly: QuotaWindow(usedPercent: 6, resetsAt: reset),
+    updatedAt: now
+  ).status(now: now)
+  #expect(status.onTrackPercent == 20.2)
+  #expect(try #require(status.paceProgress) < 0.01)
+  #expect(status.level == .normal)
+  let color = try #require(paceColor(status))
+  #expect(color.green > color.red)
+
+  let finalDay = try #require(
+    calendar.date(from: DateComponents(year: 2026, month: 9, day: 1, hour: 12))
+  )
+  status = Quota(
+    fiveHour: nil,
+    weekly: QuotaWindow(usedPercent: 99, resetsAt: reset),
+    updatedAt: finalDay
+  ).status(now: finalDay)
+  #expect(status.onTrackPercent == 100)
+
+  let afterReset = try #require(
+    calendar.date(from: DateComponents(year: 2026, month: 9, day: 1, hour: 15))
+  )
+  status = Quota(
+    fiveHour: nil,
+    weekly: QuotaWindow(
+      usedPercent: 5,
+      resetsAt: reset.addingTimeInterval(7 * 24 * 60 * 60)
+    ),
+    updatedAt: afterReset
+  ).status(now: afterReset)
+  #expect(status.onTrackPercent == 6)
+}
+
 @Test func paceColorFollowsUsageThreshold() throws {
   func color(usage: Double, threshold: Double? = 70) throws -> PaceColor {
     try #require(
@@ -131,6 +178,7 @@ import Testing
           coverage: 1,
           level: .normal,
           onTrackPercent: threshold,
+          paceProgress: nil,
           remainingPercent: 100 - usage,
           window: nil
         )
@@ -142,10 +190,27 @@ import Testing
   #expect(try color(usage: 40, threshold: 40) == PaceColor(red: 226, green: 140, blue: 54))
   #expect(try color(usage: 100) == PaceColor(red: 226, green: 54, blue: 54))
   #expect(try color(usage: 70, threshold: nil) == PaceColor(red: 226, green: 140, blue: 54))
+  let daily = try #require(
+    paceColor(
+      QuotaStatus(
+        coverage: 1,
+        level: .normal,
+        onTrackPercent: 23.2,
+        paceProgress: (15 - 14.6) / (23.2 - 14.6),
+        remainingPercent: 85,
+        window: "weekly"
+      )
+    )
+  )
+  #expect(daily.green > daily.red)
 }
 
-@Test func quotaChoosesTimedWindow() {
-  let now = Date(timeIntervalSince1970: 1_777_000_000)
+@Test func quotaChoosesTimedWindow() throws {
+  var calendar = Calendar(identifier: .gregorian)
+  calendar.timeZone = .current
+  let now = try #require(
+    calendar.date(from: DateComponents(year: 2026, month: 8, day: 26, hour: 12))
+  )
   let quota = Quota(
     fiveHour: QuotaWindow(usedPercent: 10, resetsAt: nil),
     weekly: QuotaWindow(
@@ -156,7 +221,7 @@ import Testing
   )
   let status = quota.status(now: now)
   #expect(status.window == "weekly")
-  #expect(status.onTrackPercent == 50)
+  #expect(status.onTrackPercent == 57.1)
 }
 
 @Test func expiredQuotaUsesUntimedSeverity() throws {
@@ -184,6 +249,7 @@ import Testing
         coverage: 1,
         level: .unavailable,
         onTrackPercent: nil,
+        paceProgress: nil,
         remainingPercent: nil,
         window: nil
       )
@@ -199,6 +265,7 @@ import Testing
           coverage: 1,
           level: .normal,
           onTrackPercent: 50,
+          paceProgress: nil,
           remainingPercent: remainingPercent,
           window: nil
         )

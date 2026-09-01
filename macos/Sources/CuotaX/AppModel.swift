@@ -15,6 +15,7 @@ final class AppModel: ObservableObject {
   private var refreshTask: Task<Void, Never>?
   private var updateTask: Task<Void, Never>?
   private var refreshLoop: Task<Void, Never>?
+  private var resetRefreshTask: Task<Void, Never>?
   private var updateLoop: Task<Void, Never>?
   private var queued = false
 
@@ -27,6 +28,7 @@ final class AppModel: ObservableObject {
     refreshTask?.cancel()
     updateTask?.cancel()
     refreshLoop?.cancel()
+    resetRefreshTask?.cancel()
     updateLoop?.cancel()
   }
 
@@ -41,6 +43,7 @@ final class AppModel: ObservableObject {
         coverage: nil,
         level: .unavailable,
         onTrackPercent: nil,
+        paceProgress: nil,
         remainingPercent: nil,
         window: nil
       )
@@ -106,6 +109,7 @@ final class AppModel: ObservableObject {
         guard !Task.isCancelled else { return }
         self.quota = quota
         self.error = nil
+        self.scheduleResetRefresh(for: quota)
       } catch let error as BackendError {
         guard !Task.isCancelled else { return }
         self.error = error
@@ -116,6 +120,25 @@ final class AppModel: ObservableObject {
           diagnostic: error.localizedDescription
         )
       }
+    }
+  }
+
+  private func scheduleResetRefresh(for quota: Quota) {
+    resetRefreshTask?.cancel()
+    guard let reset = quota.nextReset() else {
+      resetRefreshTask = nil
+      return
+    }
+    let delay = reset.timeIntervalSinceNow
+    resetRefreshTask = Task { [weak self] in
+      do {
+        try await Task.sleep(nanoseconds: UInt64(max(0, delay) * 1_000_000_000))
+      } catch {
+        return
+      }
+      guard let self else { return }
+      self.resetRefreshTask = nil
+      self.refresh()
     }
   }
 

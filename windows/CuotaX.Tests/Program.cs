@@ -67,6 +67,23 @@ static Task TestQuotaPacing()
     status = quota.Status(now);
     Equal(QuotaLevel.Critical, status.Level);
     True(QuotaFormatting.Color(status) is { } color && color.Red > color.Green);
+
+    now = new DateTimeOffset(new DateTime(2026, 8, 26, 12, 0, 0, DateTimeKind.Local));
+    var reset = new DateTimeOffset(new DateTime(2026, 9, 1, 14, 0, 0, DateTimeKind.Local));
+    quota = new Quota(null, new QuotaWindow(6, reset), now);
+    status = quota.Status(now);
+    Equal(20.2, status.OnTrackPercent);
+    True(status.PaceProgress < 0.01);
+    Equal(QuotaLevel.Normal, status.Level);
+    True(QuotaFormatting.Color(status) is { } dailyColor && dailyColor.Green > dailyColor.Red);
+
+    var finalDay = new DateTimeOffset(new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Local));
+    status = new Quota(null, new QuotaWindow(99, reset), finalDay).Status(finalDay);
+    Equal(100d, status.OnTrackPercent);
+
+    var afterReset = new DateTimeOffset(new DateTime(2026, 9, 1, 15, 0, 0, DateTimeKind.Local));
+    status = new Quota(null, new QuotaWindow(5, reset.AddDays(7)), afterReset).Status(afterReset);
+    Equal(6d, status.OnTrackPercent);
     return Task.CompletedTask;
 }
 
@@ -98,25 +115,39 @@ static Task TestQuotaFormatting()
     Equal(QuotaLevel.Critical, QuotaFormatting.Severity(90));
     Equal(
         new PaceColor(54, 226, 54),
-        QuotaFormatting.Color(new QuotaStatus(1, QuotaLevel.Normal, 40, 100, null))
+        QuotaFormatting.Color(new QuotaStatus(1, QuotaLevel.Normal, 40, null, 100, null))
     );
     Equal(
         new PaceColor(226, 140, 54),
-        QuotaFormatting.Color(new QuotaStatus(1, QuotaLevel.Warning, 40, 60, null))
+        QuotaFormatting.Color(new QuotaStatus(1, QuotaLevel.Warning, 40, null, 60, null))
     );
     Equal(
         new PaceColor(226, 54, 54),
-        QuotaFormatting.Color(new QuotaStatus(0, QuotaLevel.Critical, 40, 0, null))
+        QuotaFormatting.Color(new QuotaStatus(0, QuotaLevel.Critical, 40, null, 0, null))
     );
     Equal(
         new PaceColor(226, 140, 54),
-        QuotaFormatting.Color(new QuotaStatus(1, QuotaLevel.Warning, null, 30, null))
+        QuotaFormatting.Color(new QuotaStatus(1, QuotaLevel.Warning, null, null, 30, null))
+    );
+    True(
+        QuotaFormatting.Color(
+            new QuotaStatus(
+                1,
+                QuotaLevel.Normal,
+                23.2,
+                (15 - 14.6) / (23.2 - 14.6),
+                85,
+                "weekly"
+            )
+        ) is { } dailyColor && dailyColor.Green > dailyColor.Red
     );
     foreach (var remainingPercent in new[] { double.NaN, double.PositiveInfinity, double.NegativeInfinity })
     {
         Equal<PaceColor?>(
             null,
-            QuotaFormatting.Color(new QuotaStatus(1, QuotaLevel.Normal, 50, remainingPercent, null))
+            QuotaFormatting.Color(
+                new QuotaStatus(1, QuotaLevel.Normal, 50, null, remainingPercent, null)
+            )
         );
     }
     return Task.CompletedTask;
@@ -159,6 +190,8 @@ static Task TestResetNotification()
             current
         )
     );
+    Equal<DateTimeOffset?>(reset, previous.NextReset(before));
+    Equal<DateTimeOffset?>(null, previous.NextReset(reset));
     return Task.CompletedTask;
 }
 

@@ -25,6 +25,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     };
     private readonly NotifyIcon _notifyIcon = new();
     private readonly System.Windows.Forms.Timer _timer = new();
+    private readonly System.Windows.Forms.Timer _resetTimer = new();
     private readonly System.Windows.Forms.Timer _updateTimer = new();
     private readonly CancellationTokenSource _cancellation = new();
     private readonly SynchronizationContext _uiContext;
@@ -50,6 +51,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _timer.Interval = (int)RefreshInterval.TotalMilliseconds;
         _timer.Tick += (_, _) => _ = RefreshAsync();
         _timer.Start();
+        _resetTimer.Tick += (_, _) =>
+        {
+            _resetTimer.Stop();
+            _ = RefreshAsync();
+        };
         _updateTimer.Interval = (int)UpdateInterval.TotalMilliseconds;
         _updateTimer.Tick += (_, _) => _ = CheckForUpdatesAsync();
         _updateTimer.Start();
@@ -80,6 +86,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             Application.Idle -= Start;
             _cancellation.Cancel();
             _timer.Dispose();
+            _resetTimer.Dispose();
             _updateTimer.Dispose();
             _updateChecker.Dispose();
             _notifyIcon.Visible = false;
@@ -171,6 +178,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             var reset = Quota.ResetMessage(_quota, quota);
             _quota = quota;
             _error = null;
+            ScheduleResetRefresh(quota);
             if (reset is not null)
             {
                 _notifyIcon.ShowBalloonTip(5000, "Codex quota reset", reset, ToolTipIcon.Info);
@@ -201,6 +209,21 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 }
             }
         }
+    }
+
+    private void ScheduleResetRefresh(Quota quota)
+    {
+        _resetTimer.Stop();
+        if (quota.NextReset() is not { } reset)
+        {
+            return;
+        }
+
+        _resetTimer.Interval = Math.Max(
+            1,
+            (int)Math.Ceiling((reset - DateTimeOffset.Now).TotalMilliseconds)
+        );
+        _resetTimer.Start();
     }
 
     private async Task CheckForUpdatesAsync()
