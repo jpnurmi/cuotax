@@ -305,7 +305,7 @@ internal static class QuotaFormatting
         var suffix = remaining is null ? "" : $" ({remaining})";
         var local = value.Value.ToLocalTime();
         var formatted = local.ToString(
-            includeDate ? "ddd, MMM d HH:mm" : "HH:mm",
+            includeDate ? "ddd HH:mm" : "HH:mm",
             CultureInfo.InvariantCulture
         );
         return $"{formatted}{suffix}";

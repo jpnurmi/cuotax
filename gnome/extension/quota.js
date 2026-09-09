@@ -3,7 +3,6 @@
 const FIVE_HOURS_MINUTES = 300;
 const WEEK_MINUTES = 7 * 24 * 60;
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function quotaWindow(value) {
     if (!value || !Number.isFinite(value.usedPercent)) return null;
@@ -102,7 +101,7 @@ export function formatReset(value, now = Date.now(), includeDate = true) {
     const date = dateFrom(value);
     if (!date) return 'reset unknown';
 
-    const formatted = `${WEEKDAYS[date.getDay()]}, ${MONTHS[date.getMonth()]} ${date.getDate()}`;
+    const formatted = WEEKDAYS[date.getDay()];
     const remaining = formatRemaining(date.getTime() - now);
     const suffix = remaining ? ` (${remaining})` : '';
     return `${includeDate ? `${formatted} ` : ''}${formatTime(value)}${suffix}`;

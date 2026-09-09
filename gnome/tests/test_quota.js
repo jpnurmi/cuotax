@@ -55,14 +55,11 @@ assertEqual(formatTime(null), '—');
 const resetTimestamp = new Date(2026, 8, 1, 13, 37).getTime();
 assertEqual(
     formatReset(resetTimestamp, resetTimestamp - 3 * 24 * 60 * 60 * 1000),
-    'Tue, Sep 1 13:37 (3d)',
+    'Tue 13:37 (3d)',
 );
-assertEqual(
-    formatReset(resetTimestamp, resetTimestamp - 7 * 60 * 60 * 1000),
-    'Tue, Sep 1 13:37 (7h)',
-);
-assertEqual(formatReset(resetTimestamp, resetTimestamp - 33 * 60 * 1000), 'Tue, Sep 1 13:37 (33m)');
-assertEqual(formatReset(resetTimestamp, resetTimestamp), 'Tue, Sep 1 13:37');
+assertEqual(formatReset(resetTimestamp, resetTimestamp - 7 * 60 * 60 * 1000), 'Tue 13:37 (7h)');
+assertEqual(formatReset(resetTimestamp, resetTimestamp - 33 * 60 * 1000), 'Tue 13:37 (33m)');
+assertEqual(formatReset(resetTimestamp, resetTimestamp), 'Tue 13:37');
 assertEqual(formatReset(resetTimestamp, resetTimestamp - 7 * 60 * 60 * 1000, false), '13:37 (7h)');
 assertEqual(formatReset(null), 'reset unknown');
 const beforeReset = 1_777_000_000_000;

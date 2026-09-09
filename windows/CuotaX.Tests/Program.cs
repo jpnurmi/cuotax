@@ -101,10 +101,10 @@ static Task TestQuotaFormatting()
         var reset = new DateTimeOffset(
             new DateTime(2026, 9, 1, 13, 37, 0, DateTimeKind.Local)
         );
-        Equal("Tue, Sep 1 13:37 (3d)", QuotaFormatting.Reset(reset, reset.AddDays(-3)));
-        Equal("Tue, Sep 1 13:37 (7h)", QuotaFormatting.Reset(reset, reset.AddHours(-7)));
-        Equal("Tue, Sep 1 13:37 (33m)", QuotaFormatting.Reset(reset, reset.AddMinutes(-33)));
-        Equal("Tue, Sep 1 13:37", QuotaFormatting.Reset(reset, reset));
+        Equal("Tue 13:37 (3d)", QuotaFormatting.Reset(reset, reset.AddDays(-3)));
+        Equal("Tue 13:37 (7h)", QuotaFormatting.Reset(reset, reset.AddHours(-7)));
+        Equal("Tue 13:37 (33m)", QuotaFormatting.Reset(reset, reset.AddMinutes(-33)));
+        Equal("Tue 13:37", QuotaFormatting.Reset(reset, reset));
         Equal("13:37 (7h)", QuotaFormatting.Reset(reset, reset.AddHours(-7), includeDate: false));
         Equal("reset unknown", QuotaFormatting.Reset(null));
     }
