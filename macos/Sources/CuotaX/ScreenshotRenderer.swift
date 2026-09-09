@@ -124,6 +124,7 @@ enum ScreenshotRenderer {
     let comparison = normalizedPercent(value.usedPercent) <= status.onTrackPercent! ? "≤" : ">"
     let title =
       "\(label)  \(formatPercent(value.usedPercent)) (\(comparison)\(formatPercent(status.onTrackPercent))) · \(formatReset(value.resetsAt, now: now))"
+      "\(label)  \(formatPercent(value.usedPercent)) (\(comparison)\(formatPercent(status.onTrackPercent))) · \(formatReset(value.resetsAt, now: now, includeDate: !fiveHour))"
     drawText(title, x: 228, y: y, size: 15, color: labelColor)
   }
 

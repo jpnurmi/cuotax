@@ -55,6 +55,14 @@ static Task TestQuotaPacing()
     Equal(75d, status.RemainingPercent);
     Equal("5-hour", status.Window);
     Equal(
+        "13:37 (7h)",
+        QuotaFormatting.Reset(
+            new DateTimeOffset(new DateTime(2026, 9, 1, 13, 37, 0, DateTimeKind.Local)),
+            new DateTimeOffset(new DateTime(2026, 9, 1, 6, 37, 0, DateTimeKind.Local)),
+            includeDate: false
+        )
+    );
+    Equal(
         status,
         Quota.StatusFor(quota.FiveHour, "5-hour", QuotaFormatting.FiveHourMinutes, now)
     );

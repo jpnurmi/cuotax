@@ -63,6 +63,7 @@ assertEqual(
 );
 assertEqual(formatReset(resetTimestamp, resetTimestamp - 33 * 60 * 1000), 'Tue, Sep 1 13:37 (33m)');
 assertEqual(formatReset(resetTimestamp, resetTimestamp), 'Tue, Sep 1 13:37');
+assertEqual(formatReset(resetTimestamp, resetTimestamp - 7 * 60 * 60 * 1000, false), '13:37 (7h)');
 assertEqual(formatReset(null), 'reset unknown');
 const beforeReset = 1_777_000_000_000;
 const resetAt = beforeReset + 60_000;

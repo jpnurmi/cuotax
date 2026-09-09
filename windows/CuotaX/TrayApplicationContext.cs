@@ -352,7 +352,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             ? string.Empty
             : $" ({(status.Level == QuotaLevel.Normal ? "≤" : ">")}{QuotaFormatting.Percent(status.OnTrackPercent)})";
         AddInfo(
-            $"{label}  {QuotaFormatting.Percent(window.UsedPercent)}{reference} · {QuotaFormatting.Reset(window.ResetsAt)}"
+            $"{label}  {QuotaFormatting.Percent(window.UsedPercent)}{reference} · {QuotaFormatting.Reset(window.ResetsAt, includeDate: !fiveHour)}"
         );
     }
 

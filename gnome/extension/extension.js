@@ -207,7 +207,7 @@ const CuotaXIndicator = GObject.registerClass(
                     ? ''
                     : ` (${used <= status.onTrackPercent ? '≤' : '>'}${formatPercent(status.onTrackPercent)})`;
             const text = quota
-                ? `${label}  ${formatPercent(used)}${reference} · ${formatReset(quota.resetsAt)}`
+                ? `${label}  ${formatPercent(used)}${reference} · ${formatReset(quota.resetsAt, Date.now(), window !== 'fiveHour')}`
                 : `${label}  —`;
             const item = infoItem(text);
             const pacing =
