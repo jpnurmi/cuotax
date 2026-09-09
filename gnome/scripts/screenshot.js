@@ -128,7 +128,7 @@ function windowLine(cr, label, value, window, y) {
     const reference = ` (${used <= status.onTrackPercent ? '≤' : '>'}${formatPercent(status.onTrackPercent)})`;
     text(
         cr,
-        `${label}  ${formatPercent(used)}${reference} · ${formatReset(value.resetsAt, NOW)}`,
+        `${label}  ${formatPercent(used)}${reference} · ${formatReset(value.resetsAt, NOW, window !== 'fiveHour')}`,
         78,
         y,
         20,

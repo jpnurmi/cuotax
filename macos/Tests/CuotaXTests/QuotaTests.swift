@@ -25,6 +25,10 @@ import Testing
       == "Tue, Sep 1 13:37 (33m)"
   )
   #expect(formatReset(date, now: date) == "Tue, Sep 1 13:37")
+  #expect(
+    formatReset(date, now: date.addingTimeInterval(-7 * 60 * 60), includeDate: false)
+      == "13:37 (7h)"
+  )
   #expect(formatReset(nil) == "reset unknown")
 }
 

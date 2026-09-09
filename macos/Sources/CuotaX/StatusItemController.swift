@@ -140,7 +140,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
       } ?? ""
     let title =
       quota.map {
-        "\(label)  \(formatPercent($0.usedPercent))\(reference) · \(formatReset($0.resetsAt))"
+        "\(label)  \(formatPercent($0.usedPercent))\(reference) · \(formatReset($0.resetsAt, includeDate: !fiveHour))"
       } ?? "\(label)  —"
     let item = infoItem(title)
     item.image = paceImage(color: statusColor(status))

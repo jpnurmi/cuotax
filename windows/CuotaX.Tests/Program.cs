@@ -105,6 +105,7 @@ static Task TestQuotaFormatting()
         Equal("Tue, Sep 1 13:37 (7h)", QuotaFormatting.Reset(reset, reset.AddHours(-7)));
         Equal("Tue, Sep 1 13:37 (33m)", QuotaFormatting.Reset(reset, reset.AddMinutes(-33)));
         Equal("Tue, Sep 1 13:37", QuotaFormatting.Reset(reset, reset));
+        Equal("13:37 (7h)", QuotaFormatting.Reset(reset, reset.AddHours(-7), includeDate: false));
         Equal("reset unknown", QuotaFormatting.Reset(null));
     }
     finally

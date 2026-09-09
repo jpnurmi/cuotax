@@ -96,7 +96,7 @@ internal static class ScreenshotRenderer
         }
 
         var comparison = window.UsedPercent <= status.OnTrackPercent ? "≤" : ">";
-        var reset = QuotaFormatting.Reset(window.ResetsAt, Now);
+        var reset = QuotaFormatting.Reset(window.ResetsAt, Now, includeDate: !fiveHour);
         var title =
             $"{label}  {QuotaFormatting.Percent(window.UsedPercent)} ({comparison}{QuotaFormatting.Percent(status.OnTrackPercent)}) · {reset}";
         DrawText(graphics, title, 213, y, Color.FromArgb(30, 30, 30));

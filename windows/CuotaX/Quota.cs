@@ -290,7 +290,11 @@ internal static class QuotaFormatting
 
     internal static string Time(DateTimeOffset? value) => value?.ToLocalTime().ToString("t", CultureInfo.CurrentCulture) ?? "—";
 
-    internal static string Reset(DateTimeOffset? value, DateTimeOffset? now = null)
+    internal static string Reset(
+        DateTimeOffset? value,
+        DateTimeOffset? now = null,
+        bool includeDate = true
+    )
     {
         if (value is null)
         {
@@ -299,7 +303,12 @@ internal static class QuotaFormatting
 
         var remaining = Remaining(value.Value - (now ?? DateTimeOffset.Now));
         var suffix = remaining is null ? "" : $" ({remaining})";
-        return $"{value.Value.ToLocalTime().ToString("ddd, MMM d HH:mm", CultureInfo.InvariantCulture)}{suffix}";
+        var local = value.Value.ToLocalTime();
+        var formatted = local.ToString(
+            includeDate ? "ddd, MMM d HH:mm" : "HH:mm",
+            CultureInfo.InvariantCulture
+        );
+        return $"{formatted}{suffix}";
     }
 
     private static string? Remaining(TimeSpan value)

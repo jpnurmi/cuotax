@@ -98,14 +98,14 @@ function formatRemaining(milliseconds) {
     return `${Math.max(1, Math.floor(minutes))}m`;
 }
 
-export function formatReset(value, now = Date.now()) {
+export function formatReset(value, now = Date.now(), includeDate = true) {
     const date = dateFrom(value);
     if (!date) return 'reset unknown';
 
     const formatted = `${WEEKDAYS[date.getDay()]}, ${MONTHS[date.getMonth()]} ${date.getDate()}`;
     const remaining = formatRemaining(date.getTime() - now);
     const suffix = remaining ? ` (${remaining})` : '';
-    return `${formatted} ${formatTime(value)}${suffix}`;
+    return `${includeDate ? `${formatted} ` : ''}${formatTime(value)}${suffix}`;
 }
 
 function windowStatus(value, window, durationMinutes, now) {

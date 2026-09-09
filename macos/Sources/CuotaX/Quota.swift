@@ -257,11 +257,11 @@ func formatTime(_ value: Date?) -> String {
   value?.formatted(date: .omitted, time: .shortened) ?? "—"
 }
 
-func formatReset(_ value: Date?, now: Date = Date()) -> String {
+func formatReset(_ value: Date?, now: Date = Date(), includeDate: Bool = true) -> String {
   guard let value else { return "reset unknown" }
   let formatter = DateFormatter()
   formatter.locale = Locale(identifier: "en_US_POSIX")
-  formatter.dateFormat = "EEE, MMM d HH:mm"
+  formatter.dateFormat = includeDate ? "EEE, MMM d HH:mm" : "HH:mm"
   let suffix = formatRemaining(value.timeIntervalSince(now)).map { " (\($0))" } ?? ""
   return "\(formatter.string(from: value))\(suffix)"
 }
