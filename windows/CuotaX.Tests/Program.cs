@@ -55,14 +55,6 @@ static Task TestQuotaPacing()
     Equal(75d, status.RemainingPercent);
     Equal("5-hour", status.Window);
     Equal(
-        "13:37 (7h)",
-        QuotaFormatting.Reset(
-            new DateTimeOffset(new DateTime(2026, 9, 1, 13, 37, 0, DateTimeKind.Local)),
-            new DateTimeOffset(new DateTime(2026, 9, 1, 6, 37, 0, DateTimeKind.Local)),
-            includeDate: false
-        )
-    );
-    Equal(
         status,
         Quota.StatusFor(quota.FiveHour, "5-hour", QuotaFormatting.FiveHourMinutes, now)
     );
@@ -113,6 +105,7 @@ static Task TestQuotaFormatting()
         Equal("Tue, Sep 1 13:37 (7h)", QuotaFormatting.Reset(reset, reset.AddHours(-7)));
         Equal("Tue, Sep 1 13:37 (33m)", QuotaFormatting.Reset(reset, reset.AddMinutes(-33)));
         Equal("Tue, Sep 1 13:37", QuotaFormatting.Reset(reset, reset));
+        Equal("13:37 (7h)", QuotaFormatting.Reset(reset, reset.AddHours(-7), includeDate: false));
         Equal("reset unknown", QuotaFormatting.Reset(null));
     }
     finally
