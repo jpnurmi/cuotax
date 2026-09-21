@@ -262,13 +262,20 @@ func formatReset(_ value: Date?, now: Date = Date(), includeDate: Bool = true) -
   let formatter = DateFormatter()
   formatter.locale = Locale(identifier: "en_US_POSIX")
   formatter.dateFormat = includeDate ? "EEE HH:mm" : "HH:mm"
-  let suffix = formatRemaining(value.timeIntervalSince(now)).map { " (\($0))" } ?? ""
+  let suffix = formatRemaining(value, from: now).map { " (\($0))" } ?? ""
   return "\(formatter.string(from: value))\(suffix)"
 }
 
-private func formatRemaining(_ seconds: TimeInterval) -> String? {
+private func formatRemaining(_ value: Date, from now: Date) -> String? {
+  let seconds = value.timeIntervalSince(now)
   guard seconds > 0 else { return nil }
-  if seconds >= 24 * 60 * 60 { return "\(Int(seconds / (24 * 60 * 60)))d" }
+  let calendar = Calendar.current
+  let days = calendar.dateComponents(
+    [.day],
+    from: calendar.startOfDay(for: now),
+    to: calendar.startOfDay(for: value)
+  ).day ?? 0
+  if days > 0 { return "\(days)d" }
   if seconds >= 60 * 60 { return "\(Int(seconds / (60 * 60)))h" }
   return "\(max(1, Int(seconds / 60)))m"
 }

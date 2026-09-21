@@ -102,6 +102,13 @@ static Task TestQuotaFormatting()
             new DateTime(2026, 9, 1, 13, 37, 0, DateTimeKind.Local)
         );
         Equal("Tue 13:37 (3d)", QuotaFormatting.Reset(reset, reset.AddDays(-3)));
+        var friday = new DateTimeOffset(
+            new DateTime(2026, 9, 25, 9, 48, 0, DateTimeKind.Local)
+        );
+        var monday = new DateTimeOffset(
+            new DateTime(2026, 9, 21, 16, 57, 0, DateTimeKind.Local)
+        );
+        Equal("Fri 09:48 (4d)", QuotaFormatting.Reset(friday, monday));
         Equal("Tue 13:37 (7h)", QuotaFormatting.Reset(reset, reset.AddHours(-7)));
         Equal("Tue 13:37 (33m)", QuotaFormatting.Reset(reset, reset.AddMinutes(-33)));
         Equal("Tue 13:37", QuotaFormatting.Reset(reset, reset));
