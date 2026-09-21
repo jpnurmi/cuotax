@@ -16,6 +16,17 @@ import Testing
     formatReset(date, now: date.addingTimeInterval(-3 * 24 * 60 * 60))
       == "Tue 13:37 (3d)"
   )
+  let friday = try #require(
+    calendar.date(
+      from: DateComponents(year: 2026, month: 9, day: 25, hour: 9, minute: 48)
+    )
+  )
+  let monday = try #require(
+    calendar.date(
+      from: DateComponents(year: 2026, month: 9, day: 21, hour: 16, minute: 57)
+    )
+  )
+  #expect(formatReset(friday, now: monday) == "Fri 09:48 (4d)")
   #expect(
     formatReset(date, now: date.addingTimeInterval(-7 * 60 * 60))
       == "Tue 13:37 (7h)"

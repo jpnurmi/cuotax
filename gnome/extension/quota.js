@@ -88,11 +88,19 @@ export function formatTime(value) {
     return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function formatRemaining(milliseconds) {
+function formatRemaining(value, now) {
+    const milliseconds = value.getTime() - now;
     if (!(milliseconds > 0)) return null;
 
+    const start = new Date(now);
+    const day = 24 * 60 * 60 * 1000;
+    const days =
+        (Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()) -
+            Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) /
+        day;
+    if (days > 0) return `${days}d`;
+
     const minutes = milliseconds / (60 * 1000);
-    if (minutes >= 24 * 60) return `${Math.floor(minutes / (24 * 60))}d`;
     if (minutes >= 60) return `${Math.floor(minutes / 60)}h`;
     return `${Math.max(1, Math.floor(minutes))}m`;
 }
@@ -102,7 +110,7 @@ export function formatReset(value, now = Date.now(), includeDate = true) {
     if (!date) return 'reset unknown';
 
     const formatted = WEEKDAYS[date.getDay()];
-    const remaining = formatRemaining(date.getTime() - now);
+    const remaining = formatRemaining(date, now);
     const suffix = remaining ? ` (${remaining})` : '';
     return `${includeDate ? `${formatted} ` : ''}${formatTime(value)}${suffix}`;
 }

@@ -301,7 +301,8 @@ internal static class QuotaFormatting
             return "reset unknown";
         }
 
-        var remaining = Remaining(value.Value - (now ?? DateTimeOffset.Now));
+        var current = now ?? DateTimeOffset.Now;
+        var remaining = Remaining(value.Value, current);
         var suffix = remaining is null ? "" : $" ({remaining})";
         var local = value.Value.ToLocalTime();
         var formatted = local.ToString(
@@ -311,20 +312,22 @@ internal static class QuotaFormatting
         return $"{formatted}{suffix}";
     }
 
-    private static string? Remaining(TimeSpan value)
+    private static string? Remaining(DateTimeOffset value, DateTimeOffset now)
     {
-        if (value <= TimeSpan.Zero)
+        var remaining = value - now;
+        if (remaining <= TimeSpan.Zero)
         {
             return null;
         }
-        if (value.TotalDays >= 1)
+        var days = (value.ToLocalTime().Date - now.ToLocalTime().Date).Days;
+        if (days > 0)
         {
-            return $"{(int)value.TotalDays}d";
+            return $"{days}d";
         }
-        if (value.TotalHours >= 1)
+        if (remaining.TotalHours >= 1)
         {
-            return $"{(int)value.TotalHours}h";
+            return $"{(int)remaining.TotalHours}h";
         }
-        return $"{Math.Max(1, (int)value.TotalMinutes)}m";
+        return $"{Math.Max(1, (int)remaining.TotalMinutes)}m";
     }
 }
