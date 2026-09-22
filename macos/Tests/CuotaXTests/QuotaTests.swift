@@ -26,7 +26,7 @@ import Testing
       from: DateComponents(year: 2026, month: 9, day: 21, hour: 16, minute: 57)
     )
   )
-  #expect(formatReset(friday, now: monday) == "Fri 09:48 (4d)")
+  #expect(formatReset(friday, now: monday) == "Fri 09:48 (3d 16h)")
   #expect(
     formatReset(date, now: date.addingTimeInterval(-7 * 60 * 60))
       == "Tue 13:37 (7h)"

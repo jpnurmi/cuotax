@@ -88,20 +88,17 @@ export function formatTime(value) {
     return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function formatRemaining(value, now) {
-    const milliseconds = value.getTime() - now;
+function formatRemaining(milliseconds) {
     if (!(milliseconds > 0)) return null;
 
-    const start = new Date(now);
-    const day = 24 * 60 * 60 * 1000;
-    const days =
-        (Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()) -
-            Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) /
-        day;
-    if (days > 0) return `${days}d`;
-
     const minutes = milliseconds / (60 * 1000);
-    if (minutes >= 60) return `${Math.floor(minutes / 60)}h`;
+    const hours = Math.floor(minutes / 60);
+    if (hours >= 24) {
+        const days = Math.floor(hours / 24);
+        const remainingHours = hours % 24;
+        return remainingHours ? `${days}d ${remainingHours}h` : `${days}d`;
+    }
+    if (hours >= 1) return `${hours}h`;
     return `${Math.max(1, Math.floor(minutes))}m`;
 }
 
@@ -110,7 +107,7 @@ export function formatReset(value, now = Date.now(), includeDate = true) {
     if (!date) return 'reset unknown';
 
     const formatted = WEEKDAYS[date.getDay()];
-    const remaining = formatRemaining(date, now);
+    const remaining = formatRemaining(date.getTime() - now);
     const suffix = remaining ? ` (${remaining})` : '';
     return `${includeDate ? `${formatted} ` : ''}${formatTime(value)}${suffix}`;
 }

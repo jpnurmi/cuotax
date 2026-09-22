@@ -108,7 +108,7 @@ static Task TestQuotaFormatting()
         var monday = new DateTimeOffset(
             new DateTime(2026, 9, 21, 16, 57, 0, DateTimeKind.Local)
         );
-        Equal("Fri 09:48 (4d)", QuotaFormatting.Reset(friday, monday));
+        Equal("Fri 09:48 (3d 16h)", QuotaFormatting.Reset(friday, monday));
         Equal("Tue 13:37 (7h)", QuotaFormatting.Reset(reset, reset.AddHours(-7)));
         Equal("Tue 13:37 (33m)", QuotaFormatting.Reset(reset, reset.AddMinutes(-33)));
         Equal("Tue 13:37", QuotaFormatting.Reset(reset, reset));
