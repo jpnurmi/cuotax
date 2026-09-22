@@ -59,7 +59,7 @@ assertEqual(
 );
 const fridayReset = new Date(2026, 8, 25, 9, 48).getTime();
 const mondayAfternoon = new Date(2026, 8, 21, 16, 57).getTime();
-assertEqual(formatReset(fridayReset, mondayAfternoon), 'Fri 09:48 (4d)');
+assertEqual(formatReset(fridayReset, mondayAfternoon), 'Fri 09:48 (3d 16h)');
 assertEqual(formatReset(resetTimestamp, resetTimestamp - 7 * 60 * 60 * 1000), 'Tue 13:37 (7h)');
 assertEqual(formatReset(resetTimestamp, resetTimestamp - 33 * 60 * 1000), 'Tue 13:37 (33m)');
 assertEqual(formatReset(resetTimestamp, resetTimestamp), 'Tue 13:37');
