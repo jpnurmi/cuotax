@@ -12,6 +12,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import {CodexBackend} from './backend.js';
+import {ClaudeBackend} from './claude.js';
 import {UpdateChecker} from './update.js';
 import {
     displayPercent,
@@ -47,7 +48,10 @@ function colorStyle(color) {
 const QuotaIcon = GObject.registerClass(
     class QuotaIcon extends St.DrawingArea {
         _init() {
-            super._init({style_class: 'cuotax-icon'});
+            super._init({
+                style_class: 'cuotax-icon',
+                y_align: Clutter.ActorAlign.CENTER,
+            });
             this._color = null;
             this._remainingPercent = null;
             this._updateAvailable = false;
@@ -113,90 +117,94 @@ const QuotaIcon = GObject.registerClass(
 
 const CuotaXIndicator = GObject.registerClass(
     class CuotaXIndicator extends PanelMenu.Button {
-        _init(onRefresh, onOpen) {
+        _init(onRefresh, onOpen, onToggle, selection, states) {
             super._init(0.0, 'CuotaX');
 
             const box = new St.BoxLayout({style_class: 'panel-status-menu-box cuotax-box'});
             this._icon = new QuotaIcon();
             box.add_child(this._icon);
-            this._label = new St.Label({
-                text: '…',
+            const labels = new St.BoxLayout({
+                orientation: Clutter.Orientation.VERTICAL,
                 y_align: Clutter.ActorAlign.CENTER,
-                style_class: 'cuotax-label',
             });
-            box.add_child(this._label);
+            this._labels = new Map();
+            for (const provider of ['codex', 'claude']) {
+                const label = new St.Label({
+                    text: '…',
+                    x_align: Clutter.ActorAlign.CENTER,
+                    style_class: 'cuotax-label',
+                });
+                this._labels.set(provider, label);
+                labels.add_child(label);
+            }
+            box.add_child(labels);
             this.add_child(box);
 
             this.menu.connect('open-state-changed', (_menu, open) => {
-                if (open) onOpen();
+                if (open) {
+                    onOpen();
+                    this.updateMenu();
+                }
             });
             this._onRefresh = onRefresh;
+            this._onToggle = onToggle;
+            this._selection = selection;
+            this._states = states;
             this._updateAvailable = false;
-            this._quota = null;
-            this._error = null;
-            this.renderLoading();
+            this.render();
         }
 
         setUpdateAvailable() {
             if (this._updateAvailable) return;
             this._updateAvailable = true;
             this._icon.setUpdateAvailable();
-            this._setAccessibleName(this.get_accessible_name() ?? 'CuotaX');
+            this.render();
         }
 
-        renderLoading() {
-            this._quota = null;
-            this._error = null;
-            this._label.text = '…';
-            this._icon.render(quotaStatus(null));
-            this.menu.removeAll();
-            this.menu.addMenuItem(infoItem('Loading Codex quota…'));
-            this._addRefresh();
-        }
-
-        render(quota, error = null) {
-            this._quota = quota;
-            this._error = error;
-            const percent = highestPercent(quota);
-            const displayed = displayPercent(percent);
-            const status = quotaStatus(quota);
-            const pace = paceLabel(status);
-            const color = paceColor(status);
-            this._icon.render(status);
-            this._label.set_style(colorStyle(color));
-            this._label.text = displayed === null ? '—' : `${Math.round(displayed)}%`;
-            this._setAccessibleName(
-                displayed === null
-                    ? 'CuotaX unavailable'
-                    : `CuotaX ${Math.round(displayed)} percent, ${pace.toLowerCase()}`,
-            );
-
-            this.menu.removeAll();
-            this.menu.addMenuItem(this._quotaItem('5-hour', quota.fiveHour, 'fiveHour'));
-            this.menu.addMenuItem(this._quotaItem('Weekly', quota.weekly, 'weekly'));
-            if (error) {
-                this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-                this.menu.addMenuItem(
-                    infoItem('Refresh failed · showing previous data', 'cuotax-error'),
+        render() {
+            const states = this._states();
+            const stacked = this._selection().size > 1;
+            const names = [];
+            let highest = null;
+            let percent = -1;
+            for (const [provider, label] of this._labels) {
+                const state = states.get(provider);
+                label.visible = Boolean(state);
+                if (!state) continue;
+                const {quota, error} = state;
+                const used = highestPercent(quota);
+                const displayed = displayPercent(used);
+                const status = quotaStatus(quota);
+                label.set_style_class_name(
+                    stacked ? 'cuotax-label cuotax-label-stacked' : 'cuotax-label',
                 );
-                this.menu.addMenuItem(infoItem(error.diagnostic, 'cuotax-diagnostic'));
+                label.set_style(colorStyle(paceColor(status)));
+                label.text = quota
+                    ? displayed === null
+                        ? '—'
+                        : `${Math.round(displayed)}%`
+                    : error
+                      ? '!'
+                      : '…';
+                if (highest === null || (used ?? -1) > percent) {
+                    highest = quota;
+                    percent = used ?? -1;
+                }
+                const title = provider === 'claude' ? 'Claude' : 'Codex';
+                names.push(
+                    quota
+                        ? displayed === null
+                            ? `${title} unavailable`
+                            : `${title} ${Math.round(displayed)} percent, ${paceLabel(status).toLowerCase()}`
+                        : error
+                          ? `${title} unavailable: ${error.message}`
+                          : `${title} loading`,
+                );
             }
-            this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-            this.menu.addMenuItem(infoItem(`Updated ${formatTime(quota.updatedAt)}`));
-            this._addRefresh();
-        }
-
-        renderError(error) {
-            this._quota = null;
-            this._error = error;
-            this._label.text = '!';
-            this._label.set_style('');
-            this._icon.render(quotaStatus(null));
-            this._setAccessibleName(`CuotaX unavailable: ${error.message}`);
-            this.menu.removeAll();
-            this.menu.addMenuItem(infoItem(error.message, 'cuotax-error'));
-            this.menu.addMenuItem(infoItem(error.diagnostic, 'cuotax-diagnostic'));
-            this._addRefresh();
+            this._icon.render(quotaStatus(highest));
+            const suffix = this._updateAvailable ? ', update available' : '';
+            this.set_accessible_name(`CuotaX ${names.join('; ')}${suffix}`);
+            this.updateMenu();
         }
 
         _quotaItem(label, quota, window) {
@@ -234,36 +242,76 @@ const CuotaXIndicator = GObject.registerClass(
             this.menu.addMenuItem(refresh);
         }
 
-        _setAccessibleName(name) {
-            const suffix = this._updateAvailable ? ', update available' : '';
-            this.set_accessible_name(`${name.replace(/, update available$/, '')}${suffix}`);
+        updateMenu() {
+            this.menu.removeAll();
+            for (const provider of ['codex', 'claude']) {
+                const item = new PopupMenu.PopupMenuItem(
+                    provider === 'claude' ? 'Claude' : 'Codex',
+                );
+                const providers = this._selection();
+                item.setOrnament(
+                    providers.has(provider) ? PopupMenu.Ornament.CHECK : PopupMenu.Ornament.NONE,
+                );
+                item.setSensitive(!providers.has(provider) || providers.size > 1);
+                item.connect('activate', () => this._onToggle(provider));
+                this.menu.addMenuItem(item);
+                const state = this._states().get(provider);
+                if (state) this._addQuotaSection(provider, state);
+                this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+            }
+            this._addRefresh();
+        }
+
+        _addQuotaSection(provider, {quota, error}) {
+            const add = (item) => {
+                item.add_style_class_name('cuotax-quota');
+                this.menu.addMenuItem(item);
+            };
+            if (quota) {
+                add(this._quotaItem('5-hour', quota.fiveHour, 'fiveHour'));
+                add(this._quotaItem('Weekly', quota.weekly, 'weekly'));
+                if (error) {
+                    add(infoItem('Refresh failed · showing previous data', 'cuotax-error'));
+                    add(infoItem(error.diagnostic, 'cuotax-diagnostic'));
+                }
+                add(infoItem(`Updated ${formatTime(quota.updatedAt)}`));
+            } else if (error) {
+                add(infoItem(error.message, 'cuotax-error'));
+                add(infoItem(error.diagnostic, 'cuotax-diagnostic'));
+            } else {
+                add(infoItem(`Loading ${provider === 'claude' ? 'Claude' : 'Codex'} quota…`));
+            }
         }
     },
 );
 
 export default class CuotaXExtension extends Extension {
     enable() {
-        this._quota = null;
+        this._settings = this.getSettings();
+        const selected = this._settings.get_user_value('providers')
+            ? this._settings.get_strv('providers')
+            : [this._settings.get_string('provider')];
+        this._providers = new Set(selected.filter((value) => ['codex', 'claude'].includes(value)));
+        if (!this._providers.size) this._providers.add('codex');
+        this._states = new Map();
+        for (const provider of ['codex', 'claude']) {
+            if (this._providers.has(provider)) this._addProvider(provider);
+        }
         this._indicator = new CuotaXIndicator(
-            () => this._backend.refresh(),
-            () => this._refreshWhenOpened(),
+            () => {
+                for (const state of this._states.values()) state.backend.refresh();
+            },
+            () => {
+                for (const state of this._states.values()) this._refreshWhenOpened(state);
+            },
+            (provider) => this._toggleProvider(provider),
+            () => this._providers,
+            () => this._states,
         );
         Main.panel.addToStatusArea(this.uuid, this._indicator);
-
-        this._backend = new CodexBackend(
-            (quota) => {
-                const message = resetMessage(this._quota, quota);
-                this._quota = quota;
-                this._scheduleResetRefresh(quota);
-                this._indicator?.render(quota);
-                if (message) Main.notify('Codex quota reset', message);
-            },
-            (error) => {
-                if (this._quota) this._indicator?.render(this._quota, error);
-                else this._indicator?.renderError(error);
-            },
-        );
-        this._updateChecker = new UpdateChecker(() => this._indicator?.setUpdateAvailable());
+        this._updateChecker = new UpdateChecker(() => {
+            this._indicator.setUpdateAvailable();
+        });
         this._sleepSignal = Gio.DBus.system.signal_subscribe(
             'org.freedesktop.login1',
             'org.freedesktop.login1.Manager',
@@ -277,15 +325,67 @@ export default class CuotaXExtension extends Extension {
             },
         );
         this._timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, REFRESH_SECONDS, () => {
-            this._backend.refresh();
+            for (const [provider, state] of this._states) {
+                if (provider === 'claude') this._refreshWhenOpened(state, false);
+                else state.backend.refresh(false);
+            }
             return GLib.SOURCE_CONTINUE;
         });
         this._updateTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, UPDATE_SECONDS, () => {
             this._updateChecker.check();
             return GLib.SOURCE_CONTINUE;
         });
-        this._backend.refresh();
+        for (const state of this._states.values()) state.backend.refresh();
         this._updateChecker.check();
+    }
+
+    _addProvider(provider) {
+        const state = {quota: null, error: null, resetTimer: 0};
+        this._states.set(provider, state);
+        const Backend = provider === 'claude' ? ClaudeBackend : CodexBackend;
+        state.backend = new Backend(
+            (quota) => {
+                const message = resetMessage(state.quota, quota);
+                state.quota = quota;
+                state.error = null;
+                this._scheduleResetRefresh(provider, state, quota);
+                this._indicator.render();
+                if (message)
+                    Main.notify(
+                        `${provider === 'claude' ? 'Claude' : 'Codex'} quota reset`,
+                        message,
+                    );
+            },
+            (error) => {
+                state.error = error;
+                this._indicator.render();
+            },
+        );
+    }
+
+    _removeProvider(provider) {
+        const state = this._states.get(provider);
+        if (state.resetTimer) GLib.source_remove(state.resetTimer);
+        state.backend.destroy();
+        this._states.delete(provider);
+    }
+
+    _toggleProvider(provider) {
+        if (this._providers.has(provider)) {
+            if (this._providers.size === 1) return;
+            this._providers.delete(provider);
+            this._removeProvider(provider);
+        } else {
+            this._providers.add(provider);
+            this._addProvider(provider);
+            this._states.get(provider).backend.refresh();
+        }
+        this._settings.set_strv(
+            'providers',
+            ['codex', 'claude'].filter((value) => this._providers.has(value)),
+        );
+        this._settings.reset('provider');
+        this._indicator.render();
     }
 
     disable() {
@@ -295,36 +395,35 @@ export default class CuotaXExtension extends Extension {
         this._timer = 0;
         if (this._updateTimer) GLib.source_remove(this._updateTimer);
         this._updateTimer = 0;
-        if (this._resetTimer) GLib.source_remove(this._resetTimer);
-        this._resetTimer = 0;
-        this._backend?.destroy();
-        this._backend = null;
+        for (const provider of this._states.keys()) this._removeProvider(provider);
         this._updateChecker?.destroy();
         this._updateChecker = null;
         this._indicator?.destroy();
         this._indicator = null;
-        this._quota = null;
+        this._settings = null;
     }
 
-    _refreshWhenOpened() {
-        if (!this._quota || Date.now() - this._quota.updatedAt >= OPEN_REFRESH_AGE_MS)
-            this._backend.refresh();
+    _refreshWhenOpened(state, queue = true) {
+        if (!state.quota || Date.now() - state.quota.updatedAt >= OPEN_REFRESH_AGE_MS)
+            state.backend.refresh(queue);
     }
 
     _refreshAfterWake() {
-        this._backend?.refresh();
+        for (const state of this._states.values()) state.backend.refresh();
         this._updateChecker?.check();
     }
 
-    _scheduleResetRefresh(quota) {
-        if (this._resetTimer) GLib.source_remove(this._resetTimer);
-        this._resetTimer = 0;
-        const reset = nextReset(quota);
+    _scheduleResetRefresh(provider, state, quota) {
+        if (state.resetTimer) GLib.source_remove(state.resetTimer);
+        state.resetTimer = 0;
+        const expiry = provider === 'claude' ? quota.updatedAt + REFRESH_SECONDS * 1000 : null;
+        const resets = [nextReset(quota), expiry].filter(Number.isFinite);
+        const reset = resets.length ? Math.min(...resets) : null;
         if (reset === null) return;
         const seconds = Math.max(1, Math.ceil((reset - Date.now()) / 1000));
-        this._resetTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, seconds, () => {
-            this._resetTimer = 0;
-            this._backend?.refresh();
+        state.resetTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, seconds, () => {
+            state.resetTimer = 0;
+            state.backend.refresh(false);
             return GLib.SOURCE_REMOVE;
         });
     }

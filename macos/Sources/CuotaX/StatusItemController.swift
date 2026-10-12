@@ -2,19 +2,29 @@
 
 import AppKit
 import Combine
+import CoreText
 import UserNotifications
 
 @MainActor
 final class StatusItemController: NSObject, NSMenuDelegate {
-  private let model = AppModel()
+  private let defaults: UserDefaults
   private let notifier = ResetNotifier()
+  private let updateChecker = UpdateChecker()
   private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
   private let menu = NSMenu()
-  private var cancellables = Set<AnyCancellable>()
+  private var providers: Set<Provider>
+  private var models: [Provider: AppModel] = [:]
+  private var subscriptions: [Provider: Set<AnyCancellable>] = [:]
+  private var observedQuotas: [Provider: Quota] = [:]
+  private var updateAvailable = false
   private var isMenuOpen = false
-  private var observedQuota: Quota?
+  private var updateTask: Task<Void, Never>?
+  private var updateLoop: Task<Void, Never>?
+  private var cancellables = Set<AnyCancellable>()
 
-  override init() {
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+    providers = Provider.load(from: defaults)
     super.init()
 
     menu.delegate = self
@@ -24,34 +34,91 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     item.button?.imageHugsTitle = true
     item.button?.imageScaling = .scaleProportionallyDown
 
-    model.objectWillChange
-      .sink { [weak self] in
-        DispatchQueue.main.async { self?.render() }
+    updateModels()
+    checkForUpdates()
+    updateLoop = Task { [weak self] in
+      while !Task.isCancelled {
+        do {
+          try await Task.sleep(nanoseconds: 24 * 60 * 60 * 1_000_000_000)
+        } catch {
+          return
+        }
+        self?.checkForUpdates()
       }
-      .store(in: &cancellables)
-    model.$quota
-      .compactMap(\.self)
-      .sink { [weak self] quota in
-        guard let self else { return }
-        let message = resetMessage(previous: observedQuota, current: quota)
-        observedQuota = quota
-        if let message { notifier.notify(message) }
-      }
-      .store(in: &cancellables)
+    }
     NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)
       .sink { [weak self] _ in
-        DispatchQueue.main.async { self?.model.refreshAfterWake() }
+        DispatchQueue.main.async {
+          guard let self else { return }
+          for model in self.models.values { model.refreshAfterWake() }
+          self.checkForUpdates()
+        }
       }
       .store(in: &cancellables)
-
     LoginItem.registerIfNeeded()
+  }
+
+  deinit {
+    updateTask?.cancel()
+    updateLoop?.cancel()
+  }
+
+  private func toggle(_ provider: Provider) {
+    if providers.contains(provider) {
+      guard providers.count > 1 else { return }
+      providers.remove(provider)
+      subscriptions.removeValue(forKey: provider)
+      models.removeValue(forKey: provider)?.stop()
+      observedQuotas.removeValue(forKey: provider)
+    } else {
+      providers.insert(provider)
+    }
+    defaults.set(Provider.allCases.filter(providers.contains).map(\.rawValue), forKey: "providers")
+    updateModels()
+  }
+
+  private func updateModels() {
+    for provider in Provider.allCases where providers.contains(provider) && models[provider] == nil
+    {
+      let model = AppModel(provider: provider)
+      models[provider] = model
+      var cancellables = Set<AnyCancellable>()
+      model.objectWillChange
+        .sink { [weak self] in
+          DispatchQueue.main.async { self?.render() }
+        }
+        .store(in: &cancellables)
+      model.$quota
+        .compactMap(\.self)
+        .sink { [weak self, weak model] quota in
+          guard let self, let model, self.models[provider] === model else { return }
+          let message = resetMessage(previous: self.observedQuotas[provider], current: quota)
+          self.observedQuotas[provider] = quota
+          if let message { self.notifier.notify(message, provider: provider) }
+        }
+        .store(in: &cancellables)
+      subscriptions[provider] = cancellables
+      model.start()
+    }
     render()
-    model.start()
+  }
+
+  private func checkForUpdates() {
+    guard updateTask == nil else { return }
+    updateTask = Task { [weak self, updateChecker] in
+      let available = await updateChecker.isUpdateAvailable()
+      guard !Task.isCancelled else { return }
+      if available {
+        self?.updateAvailable = true
+        self?.render()
+      }
+      self?.updateTask = nil
+    }
   }
 
   func menuWillOpen(_ menu: NSMenu) {
     isMenuOpen = true
-    model.refreshIfStale()
+    for model in models.values { model.refreshIfStale() }
     renderMenu()
   }
 
@@ -69,61 +136,77 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
   private func renderButton() {
     guard let button = item.button else { return }
-
-    let color = statusColor(model.status)
+    let models = Provider.allCases.compactMap { self.models[$0] }
+    guard
+      let highest = models.max(by: {
+        ($0.quota?.highestPercent ?? -1) < ($1.quota?.highestPercent ?? -1)
+      })
+    else { return }
+    let stacked = models.count > 1
+    button.imagePosition = stacked ? .imageOnly : .imageLeading
     button.image = quotaImage(
-      status: model.status,
-      color: color,
-      updateAvailable: model.updateAvailable
+      status: highest.status,
+      color: statusColor(highest.status),
+      updateAvailable: updateAvailable,
+      percentages: stacked ? models.map { ($0.title, statusColor($0.status)) } : []
     )
     button.attributedTitle = NSAttributedString(
-      string: model.title,
+      string: stacked ? "" : highest.title,
       attributes: [
-        .font: NSFont.monospacedDigitSystemFont(
-          ofSize: NSFont.systemFontSize,
-          weight: .regular
-        ),
-        .foregroundColor: color,
+        .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
+        .foregroundColor: statusColor(highest.status),
       ]
     )
-    button.toolTip = accessibilityLabel
-    button.setAccessibilityLabel(accessibilityLabel)
-  }
-
-  private var accessibilityLabel: String {
-    let suffix = model.updateAvailable ? ", update available" : ""
-    guard model.quota != nil else {
-      let label = model.error.map { "CuotaX unavailable: \($0.message)" } ?? "CuotaX loading"
-      return label + suffix
+    let labels = models.map { model in
+      if model.quota != nil {
+        return "\(model.provider.title) \(model.title), \(model.status.paceLabel.lowercased())"
+      }
+      return model.error.map { "\(model.provider.title) unavailable: \($0.message)" }
+        ?? "\(model.provider.title) loading"
     }
-    return "CuotaX \(model.title), \(model.status.paceLabel.lowercased())" + suffix
+    let suffix = updateAvailable ? ", update available" : ""
+    let label = "CuotaX " + labels.joined(separator: "; ") + suffix
+    button.toolTip = label
+    button.setAccessibilityLabel(label)
   }
 
   private func renderMenu() {
     menu.removeAllItems()
 
+    for provider in Provider.allCases {
+      let item = actionItem(provider.title, action: #selector(toggleProvider(_:)))
+      item.representedObject = provider.rawValue
+      item.state = providers.contains(provider) ? .on : .off
+      item.isEnabled = !providers.contains(provider) || providers.count > 1
+      menu.addItem(item)
+      if let model = models[provider] {
+        addQuotaSection(model)
+      }
+      menu.addItem(.separator())
+    }
+    menu.addItem(actionItem("Refresh", action: #selector(refresh), keyEquivalent: "r"))
+
+    menu.addItem(.separator())
+    menu.addItem(actionItem("Quit CuotaX", action: #selector(quit), keyEquivalent: "q"))
+  }
+
+  private func addQuotaSection(_ model: AppModel) {
+    let start = menu.numberOfItems
     if let quota = model.quota {
       menu.addItem(quotaItem(label: "5-hour", quota: quota.fiveHour, fiveHour: true))
       menu.addItem(quotaItem(label: "Weekly", quota: quota.weekly, fiveHour: false))
       if let error = model.error {
-        menu.addItem(.separator())
         menu.addItem(infoItem("Refresh failed · showing previous data", color: .systemRed))
         menu.addItem(infoItem(error.diagnostic))
       }
-      menu.addItem(.separator())
       menu.addItem(infoItem("Updated \(formatTime(quota.updatedAt))"))
     } else if let error = model.error {
       menu.addItem(infoItem(error.message, color: .systemRed))
       menu.addItem(infoItem(error.diagnostic))
     } else {
-      menu.addItem(infoItem("Loading Codex quota…"))
+      menu.addItem(infoItem("Loading \(model.provider.title) quota…"))
     }
-
-    menu.addItem(.separator())
-    menu.addItem(actionItem("Refresh", action: #selector(refresh), keyEquivalent: "r"))
-
-    menu.addItem(.separator())
-    menu.addItem(actionItem("Quit CuotaX", action: #selector(quit), keyEquivalent: "q"))
+    for index in start..<menu.numberOfItems { menu.item(at: index)?.indentationLevel = 1 }
   }
 
   private func quotaItem(label: String, quota: QuotaWindow?, fiveHour: Bool) -> NSMenuItem {
@@ -175,7 +258,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
   }
 
   @objc private func refresh() {
-    model.refresh()
+    for model in models.values { model.refresh() }
+  }
+
+  @objc private func toggleProvider(_ item: NSMenuItem) {
+    guard let value = item.representedObject as? String,
+      let provider = Provider(rawValue: value)
+    else { return }
+    toggle(provider)
   }
 
   @objc private func quit() {
@@ -192,9 +282,9 @@ private final class ResetNotifier: NSObject, UNUserNotificationCenterDelegate {
     center.requestAuthorization(options: [.alert]) { _, _ in }
   }
 
-  func notify(_ message: String) {
+  func notify(_ message: String, provider: Provider) {
     let content = UNMutableNotificationContent()
-    content.title = "Codex quota reset"
+    content.title = "\(provider.title) quota reset"
     content.body = message
     center.add(
       UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
@@ -220,10 +310,22 @@ func statusColor(_ status: QuotaStatus) -> NSColor {
   )
 }
 
-func quotaImage(status: QuotaStatus, color: NSColor, updateAvailable: Bool) -> NSImage {
-  let size = NSSize(width: 18, height: 18)
+func quotaImage(
+  status: QuotaStatus, color: NSColor, updateAvailable: Bool,
+  percentages: [(String, NSColor)] = []
+) -> NSImage {
+  let font = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .regular)
+  let lines = percentages.map { value, color in
+    CTLineCreateWithAttributedString(
+      NSAttributedString(
+        string: value, attributes: [.font: font, .foregroundColor: color.cgColor]
+      ))
+  }
+  let widths = lines.map { CGFloat(CTLineGetTypographicBounds($0, nil, nil, nil)) }
+  let width = ceil(widths.max() ?? 0)
+  let size = NSSize(width: 18 + (lines.isEmpty ? 0 : 4 + width), height: 18)
   let image = NSImage(size: size, flipped: false) { _ in
-    let center = NSPoint(x: size.width / 2, y: size.height / 2)
+    let center = NSPoint(x: 9, y: 9)
     let radius = 7.1
 
     color.withAlphaComponent(0.25).setStroke()
@@ -261,6 +363,21 @@ func quotaImage(status: QuotaStatus, color: NSColor, updateAvailable: Bool) -> N
     if updateAvailable {
       NSColor(srgbRed: 22 / 255, green: 136 / 255, blue: 248 / 255, alpha: 1).setFill()
       NSBezierPath(ovalIn: NSRect(x: 0, y: 0, width: 5, height: 5)).fill()
+    }
+    if let context = NSGraphicsContext.current?.cgContext {
+      context.saveGState()
+      context.textMatrix = .identity
+      context.setShouldSubpixelPositionFonts(true)
+      context.setShouldSubpixelQuantizeFonts(false)
+      for (index, line) in lines.enumerated() {
+        let bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+        context.textPosition = CGPoint(
+          x: 22 + (width - widths[index]) / 2,
+          y: center.y + (CGFloat(lines.count - 1) / 2 - CGFloat(index)) * 10 - bounds.midY
+        )
+        CTLineDraw(line, context)
+      }
+      context.restoreGState()
     }
     return true
   }

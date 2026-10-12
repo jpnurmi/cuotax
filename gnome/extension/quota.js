@@ -29,6 +29,21 @@ export function parseQuota(result, updatedAt = Date.now()) {
     return {fiveHour, weekly, updatedAt};
 }
 
+export function parseClaudeQuota(result, updatedAt = Date.now()) {
+    const window = (value) => {
+        const percent = value?.utilization ?? value?.percent;
+        if (!Number.isFinite(percent)) return null;
+        const reset = typeof value.resets_at === 'string' ? Date.parse(value.resets_at) : NaN;
+        return {usedPercent: percent, resetsAt: Number.isFinite(reset) ? reset : null};
+    };
+    const fiveHour = window(result?.five_hour ?? result?.limits?.find((v) => v.kind === 'session'));
+    const weekly = window(
+        result?.seven_day ?? result?.limits?.find((v) => v.kind === 'weekly_all'),
+    );
+    if (!fiveHour && !weekly) throw new Error('Claude returned no 5-hour or weekly quota');
+    return {fiveHour, weekly, updatedAt};
+}
+
 export function highestPercent(quota) {
     const values = [quota?.fiveHour, quota?.weekly]
         .map((value) => value?.usedPercent)

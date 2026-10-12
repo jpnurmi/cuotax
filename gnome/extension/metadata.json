@@ -1,7 +1,8 @@
 {
   "uuid": "cuotax@jpnurmi.github.com",
   "name": "CuotaX",
-  "description": "Codex quota in the GNOME top panel",
+  "description": "Codex and Claude quotas in the GNOME top panel",
+  "settings-schema": "org.gnome.shell.extensions.cuotax",
   "shell-version": ["50"],
   "version": 1
 }

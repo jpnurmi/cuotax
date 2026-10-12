@@ -5,31 +5,34 @@ import Foundation
 
 @MainActor
 final class AppModel: ObservableObject {
+  let provider: Provider
   @Published private(set) var quota: Quota?
   @Published private(set) var error: BackendError?
   @Published private(set) var isLoading = true
-  @Published private(set) var updateAvailable = false
 
   private let client: CodexClient
-  private let updateChecker: UpdateChecker
+  private let claudeClient: ClaudeClient
   private var refreshTask: Task<Void, Never>?
-  private var updateTask: Task<Void, Never>?
   private var refreshLoop: Task<Void, Never>?
   private var resetRefreshTask: Task<Void, Never>?
-  private var updateLoop: Task<Void, Never>?
   private var queued = false
+  private var active = true
+  private var usageWatcher: ClaudeUsageWatcher?
 
-  init(client: CodexClient = CodexClient(), updateChecker: UpdateChecker = UpdateChecker()) {
+  init(
+    provider: Provider = .codex,
+    client: CodexClient = CodexClient(),
+    claudeClient: ClaudeClient = ClaudeClient()
+  ) {
+    self.provider = provider
     self.client = client
-    self.updateChecker = updateChecker
+    self.claudeClient = claudeClient
   }
 
   deinit {
     refreshTask?.cancel()
-    updateTask?.cancel()
     refreshLoop?.cancel()
     resetRefreshTask?.cancel()
-    updateLoop?.cancel()
   }
 
   var title: String {
@@ -50,9 +53,9 @@ final class AppModel: ObservableObject {
   }
 
   func start() {
-    guard refreshLoop == nil else { return }
+    guard active, refreshLoop == nil else { return }
+    watchClaudeUsage()
     refresh()
-    checkForUpdates()
     refreshLoop = Task { [weak self] in
       while !Task.isCancelled {
         do {
@@ -60,17 +63,8 @@ final class AppModel: ObservableObject {
         } catch {
           return
         }
-        self?.refresh()
-      }
-    }
-    updateLoop = Task { [weak self] in
-      while !Task.isCancelled {
-        do {
-          try await Task.sleep(nanoseconds: 24 * 60 * 60 * 1_000_000_000)
-        } catch {
-          return
-        }
-        self?.checkForUpdates()
+        guard let self, self.refreshTask == nil else { continue }
+        if self.provider == .claude { self.refreshIfStale() } else { self.refresh() }
       }
     }
   }
@@ -83,16 +77,32 @@ final class AppModel: ObservableObject {
 
   func refreshAfterWake() {
     refresh()
-    checkForUpdates()
+  }
+
+  func stop() {
+    active = false
+    refreshTask?.cancel()
+    refreshLoop?.cancel()
+    resetRefreshTask?.cancel()
+    usageWatcher?.cancel()
+    queued = false
+  }
+
+  private func watchClaudeUsage() {
+    guard provider == .claude, usageWatcher == nil, let url = claudeClient.cacheURL else { return }
+    usageWatcher = ClaudeUsageWatcher(url: url) { [weak self] in self?.refresh() }
   }
 
   func refresh() {
+    guard active else { return }
+    watchClaudeUsage()
     guard refreshTask == nil else {
       queued = true
       return
     }
 
     if quota == nil { isLoading = true }
+    let provider = provider
     refreshTask = Task { [weak self] in
       guard let self else { return }
       defer {
@@ -105,7 +115,7 @@ final class AppModel: ObservableObject {
       }
 
       do {
-        let quota = try await client.readQuota()
+        let quota = try await provider == .codex ? client.readQuota() : claudeClient.readQuota()
         guard !Task.isCancelled else { return }
         self.quota = quota
         self.error = nil
@@ -116,7 +126,7 @@ final class AppModel: ObservableObject {
       } catch {
         guard !Task.isCancelled else { return }
         self.error = BackendError(
-          message: "Codex quota request failed",
+          message: "\(provider.title) quota request failed",
           diagnostic: error.localizedDescription
         )
       }
@@ -125,7 +135,8 @@ final class AppModel: ObservableObject {
 
   private func scheduleResetRefresh(for quota: Quota) {
     resetRefreshTask?.cancel()
-    guard let reset = quota.nextReset() else {
+    let expiry = provider == .claude ? quota.updatedAt.addingTimeInterval(5 * 60) : nil
+    guard let reset = [quota.nextReset(), expiry].compactMap(\.self).min() else {
       resetRefreshTask = nil
       return
     }
@@ -138,17 +149,7 @@ final class AppModel: ObservableObject {
       }
       guard let self else { return }
       self.resetRefreshTask = nil
-      self.refresh()
-    }
-  }
-
-  private func checkForUpdates() {
-    guard updateTask == nil else { return }
-    updateTask = Task { [weak self, updateChecker] in
-      let available = await updateChecker.isUpdateAvailable()
-      guard !Task.isCancelled else { return }
-      if available { self?.updateAvailable = true }
-      self?.updateTask = nil
+      if self.refreshTask == nil { self.refresh() }
     }
   }
 }

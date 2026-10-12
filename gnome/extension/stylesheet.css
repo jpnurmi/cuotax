@@ -6,6 +6,10 @@
   min-width: 2.5em;
 }
 
+.cuotax-label-stacked {
+  font-size: 0.65em;
+}
+
 .cuotax-icon {
   width: 16px;
   height: 16px;
@@ -24,4 +28,8 @@
 .cuotax-diagnostic {
   opacity: 0.7;
   font-size: 0.9em;
+}
+
+.cuotax-quota {
+  padding-left: 2.5em;
 }

@@ -2,6 +2,8 @@
 
 using System.Drawing.Drawing2D;
 using System.Globalization;
+using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using CuotaX;
 
@@ -22,6 +24,11 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("app-server invalid reset", TestAppServerInvalidReset),
     ("app-server error", TestAppServerError),
     ("app-server timeout", TestAppServerTimeout),
+    ("Claude usage", TestClaudeQuota),
+    ("Claude login", TestClaudeLogin),
+    ("Claude status-line fallback", TestClaudeHybrid),
+    ("Claude request errors", TestClaudeErrors),
+    ("Claude status-line watcher", TestClaudeWatcher),
 };
 
 if (Environment.GetEnvironmentVariable("CODEX_TEST_LIVE") == "1")
@@ -382,5 +389,144 @@ static void True(bool value)
     if (!value)
     {
         throw new Exception("Expected true");
+    }
+}
+
+static Task TestClaudeQuota()
+{
+    var quota = ClaudeClient.ParseQuota("""
+        {"five_hour":{"utilization":42,"resets_at":"2026-10-12T22:00:00.123Z"},"seven_day":{"utilization":7,"resets_at":"invalid"}}
+        """);
+    Equal(42d, quota.FiveHour?.UsedPercent);
+    Equal(7d, quota.Weekly?.UsedPercent);
+    True(quota.FiveHour?.ResetsAt is not null);
+    Equal(null, quota.Weekly?.ResetsAt);
+    quota = ClaudeClient.ParseQuota("""
+        {"limits":[{"kind":"weekly_scoped","percent":99},{"kind":"session","percent":25},{"kind":"weekly_all","percent":8}]}
+        """);
+    Equal(25d, quota.FiveHour?.UsedPercent);
+    Equal(8d, quota.Weekly?.UsedPercent);
+    return Task.CompletedTask;
+}
+
+static Task TestClaudeLogin()
+{
+    Equal("fixture", ClaudeClient.ParseToken("""{"claudeAiOauth":{"accessToken":"fixture"}}"""));
+    foreach (var data in new[] { "{}", "invalid", """{"claudeAiOauth":{"accessToken":"fixture","expiresAt":1}}""" })
+    {
+        try
+        {
+            _ = ClaudeClient.ParseToken(data);
+            throw new Exception("Expected login failure");
+        }
+        catch (BackendException)
+        {
+        }
+    }
+    return Task.CompletedTask;
+}
+
+static async Task TestClaudeHybrid()
+{
+    var directory = Path.Combine(Path.GetTempPath(), $"cuotax-{Guid.NewGuid()}");
+    Directory.CreateDirectory(directory);
+    try
+    {
+        var credentials = Path.Combine(directory, ".credentials.json");
+        var cache = Path.Combine(directory, "cuotax-usage.json");
+        await File.WriteAllTextAsync(credentials, """{"claudeAiOauth":{"accessToken":"fixture"}}""");
+        var handler = new ClaudeHandler(HttpStatusCode.OK);
+        using var client = new ClaudeClient(credentials, handler);
+        var updatedAt = DateTimeOffset.Now.AddMinutes(-1).ToUnixTimeMilliseconds();
+        await File.WriteAllTextAsync(cache, $"{{\"updatedAt\":{updatedAt},\"five_hour\":{{\"utilization\":98}}}}");
+        var quota = await client.ReadQuotaAsync();
+        Equal(98d, quota.FiveHour?.UsedPercent);
+        Equal(updatedAt, quota.UpdatedAt.ToUnixTimeMilliseconds());
+        Equal(0, handler.Requests);
+        foreach (var data in new[] {
+            "invalid",
+            $"{{\"updatedAt\":{DateTimeOffset.Now.AddMinutes(-6).ToUnixTimeMilliseconds()},\"five_hour\":{{\"utilization\":98}}}}",
+            $"{{\"updatedAt\":{DateTimeOffset.Now.AddMinutes(1).ToUnixTimeMilliseconds()},\"five_hour\":{{\"utilization\":98}}}}",
+            $"{{\"updatedAt\":{DateTimeOffset.Now.ToUnixTimeMilliseconds()}}}",
+        })
+        {
+            await File.WriteAllTextAsync(cache, data);
+            Equal(42d, (await client.ReadQuotaAsync()).FiveHour?.UsedPercent);
+        }
+        File.Delete(cache);
+        Equal(42d, (await client.ReadQuotaAsync()).FiveHour?.UsedPercent);
+        Equal(5, handler.Requests);
+    }
+    finally
+    {
+        Directory.Delete(directory, recursive: true);
+    }
+}
+
+static async Task TestClaudeErrors()
+{
+    var directory = Path.Combine(Path.GetTempPath(), $"cuotax-{Guid.NewGuid()}");
+    Directory.CreateDirectory(directory);
+    try
+    {
+        var credentials = Path.Combine(directory, ".credentials.json");
+        await File.WriteAllTextAsync(credentials, """{"claudeAiOauth":{"accessToken":"fixture"}}""");
+        foreach (var status in new[] { HttpStatusCode.Unauthorized, HttpStatusCode.TooManyRequests, HttpStatusCode.InternalServerError })
+        {
+            using var client = new ClaudeClient(credentials, new ClaudeHandler(status));
+            try
+            {
+                _ = await client.ReadQuotaAsync();
+                throw new Exception("Expected Claude request failure");
+            }
+            catch (BackendException error)
+            {
+                True(error.Message.StartsWith("Claude"));
+            }
+        }
+    }
+    finally
+    {
+        Directory.Delete(directory, recursive: true);
+    }
+}
+
+static async Task TestClaudeWatcher()
+{
+    var directory = Path.Combine(Path.GetTempPath(), $"cuotax-{Guid.NewGuid()}");
+    Directory.CreateDirectory(directory);
+    try
+    {
+        using var client = new ClaudeClient(Path.Combine(directory, ".credentials.json"));
+        var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.WatchUsage(() => changed.TrySetResult());
+        var temporary = Path.Combine(directory, "usage.tmp");
+        await File.WriteAllTextAsync(temporary, "{}");
+        File.Move(temporary, Path.Combine(directory, "cuotax-usage.json"), overwrite: true);
+        await changed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+    finally
+    {
+        Directory.Delete(directory, recursive: true);
+    }
+}
+
+internal sealed class ClaudeHandler(HttpStatusCode status) : HttpMessageHandler
+{
+    internal int Requests { get; private set; }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        if (request.RequestUri?.AbsoluteUri != "https://api.anthropic.com/api/oauth/usage"
+            || request.Headers.Authorization?.Scheme != "Bearer"
+            || request.Headers.GetValues("anthropic-beta").Single() != "oauth-2025-04-20")
+        {
+            throw new Exception("Unexpected Claude usage request");
+        }
+        Requests++;
+        return Task.FromResult(new HttpResponseMessage(status)
+        {
+            Content = new StringContent("""{"five_hour":{"utilization":42},"seven_day":{"utilization":7}}"""),
+        });
     }
 }

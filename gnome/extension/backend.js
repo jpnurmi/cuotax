@@ -64,10 +64,10 @@ export class CodexBackend {
         this._cancellable = null;
     }
 
-    refresh() {
+    refresh(queue = true) {
         if (!this._active) return;
         if (this._running) {
-            this._queued = true;
+            this._queued ||= queue;
             return;
         }
         this._run();

@@ -11,4 +11,5 @@ $executable = Join-Path $destination "CuotaX.exe"
 Get-Process -Name "CuotaX" -ErrorAction SilentlyContinue | Stop-Process
 New-Item -ItemType Directory -Path $destination -Force | Out-Null
 Copy-Item -LiteralPath $source -Destination $executable -Force
+Copy-Item -LiteralPath (Join-Path $projectRoot "dist\windows\claude-statusline.mjs") -Destination $destination -Force
 Start-Process -FilePath $executable -WindowStyle Hidden

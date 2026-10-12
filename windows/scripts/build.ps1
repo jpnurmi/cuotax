@@ -26,3 +26,4 @@ dotnet publish (Join-Path $windowsRoot "CuotaX\CuotaX.csproj") `
 if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE"
 }
+Copy-Item -LiteralPath (Join-Path $projectRoot "scripts\claude-statusline.mjs") -Destination $output -Force
