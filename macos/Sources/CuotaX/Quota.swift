@@ -272,12 +272,13 @@ func formatPercent(_ value: Double?) -> String {
 }
 
 func formatPercentages(_ quota: Quota) -> String {
-  let values = [quota.fiveHour, quota.weekly, quota.fable]
-    .compactMap(\.self)
-    .map(\.usedPercent)
-    .filter(\.isFinite)
-    .map { String(Int(displayPercent($0).rounded())) }
-  return values.isEmpty ? "—" : values.joined(separator: "/") + "%"
+  var windows = [quota.fiveHour, quota.weekly]
+  if quota.fable != nil { windows.append(quota.fable) }
+  let values = windows.map { window in
+    guard let percent = window?.usedPercent, percent.isFinite else { return "-" }
+    return String(Int(displayPercent(percent).rounded()))
+  }
+  return values.joined(separator: "/") + "%"
 }
 
 func formatTime(_ value: Date?) -> String {

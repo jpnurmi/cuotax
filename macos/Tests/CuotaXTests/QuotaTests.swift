@@ -339,9 +339,10 @@ import Testing
 
   #expect(formatPercentages(quota(26, 6, 12)) == "26/6/12%")
   #expect(formatPercentages(quota(42.5, 7)) == "43/7%")
-  #expect(formatPercentages(quota(nil, 8)) == "8%")
-  #expect(formatPercentages(quota(nil, nil, 12)) == "12%")
+  #expect(formatPercentages(quota(nil, 8)) == "-/8%")
+  #expect(formatPercentages(quota(nil, nil, 12)) == "-/-/12%")
   #expect(formatPercentages(quota(-1, 131)) == "0/100%")
-  #expect(formatPercentages(quota(nil, nil)) == "—")
-  #expect(formatPercentages(quota(.nan, .infinity)) == "—")
+  #expect(formatPercentages(quota(nil, nil)) == "-/-%")
+  #expect(formatPercentages(quota(.nan, .infinity)) == "-/-%")
+  #expect(formatPercentages(quota(26, nil)) == "26/-%")
 }

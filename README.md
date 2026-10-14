@@ -12,6 +12,8 @@ show all available percentages in 5-hour / weekly / Fable weekly order, such as
 Enable Codex, Claude, or both using the menu checkboxes. CuotaX remembers the
 enabled providers. GNOME and macOS combine them in one indicator with stacked
 `CX` (Codex) and `CC` (Claude) rows, replacing the icon when both are enabled.
+Codex keeps two slots; Claude adds Fable weekly when available. Missing limits
+use `-`, such as `CX 26/-%`.
 Each prefix and its percentages share the provider's quota color. Windows shows
 a separate indicator for each. Each provider's checkbox shows its update time,
 with limits and errors beneath it. Each provider refreshes independently and has

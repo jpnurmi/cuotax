@@ -100,10 +100,14 @@ export function formatPercent(value) {
 }
 
 export function formatPercentages(quota) {
-    const values = [quota?.fiveHour, quota?.weekly, quota?.fable]
-        .map((value) => displayPercent(value?.usedPercent))
-        .filter((value) => value !== null);
-    return values.length ? `${values.map(Math.round).join('/')}%` : '—';
+    if (!quota) return '-';
+    const windows = [quota.fiveHour, quota.weekly];
+    if (quota.fable) windows.push(quota.fable);
+    const values = windows.map((value) => {
+        const displayed = displayPercent(value?.usedPercent);
+        return displayed === null ? '-' : Math.round(displayed);
+    });
+    return `${values.join('/')}%`;
 }
 
 function dateFrom(value) {

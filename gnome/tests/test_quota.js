@@ -264,11 +264,12 @@ assertEqual(
     '26/6/12%',
 );
 assertEqual(formatPercentages(quota), '43/7%');
-assertEqual(formatPercentages(weeklyOnly), '8%');
-assertEqual(formatPercentages({fable: {usedPercent: 12}}), '12%');
+assertEqual(formatPercentages(weeklyOnly), '-/8%');
+assertEqual(formatPercentages({fable: {usedPercent: 12}}), '-/-/12%');
 assertEqual(formatPercentages({fiveHour: {usedPercent: -1}, weekly: {usedPercent: 131}}), '0/100%');
-assertEqual(formatPercentages(null), '—');
+assertEqual(formatPercentages(null), '-');
 assertEqual(
     formatPercentages({fiveHour: {usedPercent: NaN}, weekly: {usedPercent: Infinity}}),
-    '—',
+    '-/-%',
 );
+assertEqual(formatPercentages({fiveHour: {usedPercent: 26}}), '26/-%');
