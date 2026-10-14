@@ -4,6 +4,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
+import Pango from 'gi://Pango';
 import St from 'gi://St';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -135,6 +136,7 @@ const CuotaXIndicator = GObject.registerClass(
                     x_align: Clutter.ActorAlign.CENTER,
                     style_class: 'cuotax-label',
                 });
+                label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
                 this._labels.set(provider, label);
                 labels.add_child(label);
             }
@@ -190,7 +192,13 @@ const CuotaXIndicator = GObject.registerClass(
                 label.set_style(colorStyle(paceColor(status)));
                 const text = quota ? formatPercentages(quota) : error ? '!' : '…';
                 const prefix = provider === 'claude' ? 'CC' : 'CX';
-                label.text = stacked ? `${prefix} ${text}` : text;
+                const value = stacked ? `${prefix} ${text}` : text;
+                label.clutter_text.set_markup(
+                    GLib.markup_escape_text(value, -1).replaceAll(
+                        '-',
+                        '<span font_family="monospace">-</span>',
+                    ),
+                );
                 if (highest === null || (used ?? -1) > percent) {
                     highest = quota;
                     percent = used ?? -1;

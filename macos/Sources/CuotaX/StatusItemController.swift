@@ -327,11 +327,18 @@ func quotaImage(
   percentages: [(String, NSColor)] = []
 ) -> NSImage {
   let font = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .regular)
+  let hyphenFont = NSFont.monospacedSystemFont(ofSize: 9, weight: .regular)
   let lines = percentages.map { value, color in
-    CTLineCreateWithAttributedString(
-      NSAttributedString(
-        string: value, attributes: [.font: font, .foregroundColor: color.cgColor]
-      ))
+    let text = NSMutableAttributedString(
+      string: value, attributes: [.font: font, .foregroundColor: color.cgColor]
+    )
+    for index in value.indices where value[index] == "-" {
+      text.addAttribute(
+        .font, value: hyphenFont,
+        range: NSRange(index..<value.index(after: index), in: value)
+      )
+    }
+    return CTLineCreateWithAttributedString(text)
   }
   let widths = lines.map { CGFloat(CTLineGetTypographicBounds($0, nil, nil, nil)) }
   let width = ceil(widths.max() ?? 0)
