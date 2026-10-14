@@ -36,6 +36,7 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("Claude login recovery", TestClaudeRecovery),
     ("Claude login concurrency", TestClaudeConcurrentRenewal),
     ("stacked tray icon", TestStackedTrayIcon),
+    ("native tray icon", TestNativeTrayIcon),
 };
 
 if (Environment.GetEnvironmentVariable("CODEX_TEST_LIVE") == "1")
@@ -475,6 +476,42 @@ static void True(bool value)
     {
         throw new Exception("Expected true");
     }
+}
+
+static Task TestNativeTrayIcon()
+{
+    var now = DateTimeOffset.FromUnixTimeSeconds(1_777_000_000);
+    var visual = TrayIconRenderer.ForQuota(new Quota(null, new QuotaWindow(8, now.AddDays(5)), now), now, weeklyOnly: true);
+    var rows = new[] { visual, visual };
+    using var icon = TrayIconRenderer.Create(rows);
+    using var bitmap = TrayIconRenderer.Render(rows, icon.Width);
+    foreach (var background in new[] { Color.FromArgb(27, 32, 41), Color.FromArgb(240, 240, 240) })
+    {
+        using var expected = new Bitmap(icon.Width, icon.Height);
+        using var actual = new Bitmap(icon.Width, icon.Height);
+        using (var graphics = Graphics.FromImage(expected))
+        {
+            graphics.Clear(background);
+            graphics.DrawImageUnscaled(bitmap, 0, 0);
+        }
+        using (var graphics = Graphics.FromImage(actual))
+        {
+            graphics.Clear(background);
+            graphics.DrawIconUnstretched(icon, new Rectangle(Point.Empty, icon.Size));
+        }
+        for (var y = 0; y < icon.Height; y++)
+        {
+            for (var x = 0; x < icon.Width; x++)
+            {
+                var source = expected.GetPixel(x, y);
+                var rendered = actual.GetPixel(x, y);
+                True(Math.Abs(source.R - rendered.R) <= 1
+                    && Math.Abs(source.G - rendered.G) <= 1
+                    && Math.Abs(source.B - rendered.B) <= 1);
+            }
+        }
+    }
+    return Task.CompletedTask;
 }
 
 static Task TestClaudeQuota()

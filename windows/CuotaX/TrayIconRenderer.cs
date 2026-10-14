@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Drawing.Text;
-using System.Runtime.InteropServices;
 
 namespace CuotaX;
 
@@ -50,16 +50,26 @@ internal static class TrayIconRenderer
     internal static Icon Create(IReadOnlyList<TrayIconVisual> visuals, bool updateAvailable = false)
     {
         using var bitmap = Render(visuals, SystemInformation.SmallIconSize.Width, updateAvailable);
-        var handle = bitmap.GetHicon();
-        try
-        {
-            using var icon = Icon.FromHandle(handle);
-            return (Icon)icon.Clone();
-        }
-        finally
-        {
-            DestroyIcon(handle);
-        }
+        using var png = new MemoryStream();
+        bitmap.Save(png, ImageFormat.Png);
+        using var stream = new MemoryStream();
+        using var writer = new BinaryWriter(stream);
+        const uint offset = 6 + 16;
+        // one PNG frame in an ICO container preserves antialiased alpha
+        writer.Write((ushort)0);
+        writer.Write((ushort)1);
+        writer.Write((ushort)1);
+        writer.Write((byte)bitmap.Width);
+        writer.Write((byte)bitmap.Height);
+        writer.Write((byte)0);
+        writer.Write((byte)0);
+        writer.Write((ushort)1);
+        writer.Write((ushort)32);
+        writer.Write((uint)png.Length);
+        writer.Write(offset);
+        writer.Write(png.ToArray());
+        stream.Position = 0;
+        return new Icon(stream, bitmap.Size);
     }
 
     internal static Bitmap Render(TrayIconVisual visual, int size, bool updateAvailable = false)
@@ -162,8 +172,4 @@ internal static class TrayIconRenderer
             + 0.0722 * Linear(background.B);
         return luminance > 0.42 ? Color.Black : Color.White;
     }
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool DestroyIcon(nint handle);
 }
