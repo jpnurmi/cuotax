@@ -15,11 +15,17 @@ import {
 } from '../extension/quota.js';
 
 const WIDTH = 740;
-const HEIGHT = 369;
+const HEIGHT = 561;
 const NOW = Date.parse('2026-08-28T12:23:00Z');
-const quota = {
+const codex = {
     fiveHour: {usedPercent: 68, resetsAt: Date.parse('2026-08-28T14:53:00Z')},
     weekly: {usedPercent: 42, resetsAt: Date.parse('2026-09-01T16:13:00Z')},
+    updatedAt: NOW,
+};
+const claude = {
+    fiveHour: {usedPercent: 26, resetsAt: Date.parse('2026-08-28T14:53:00Z')},
+    weekly: {usedPercent: 6, resetsAt: Date.parse('2026-09-01T16:13:00Z')},
+    fable: {usedPercent: 12, resetsAt: Date.parse('2026-09-01T16:13:00Z')},
     updatedAt: NOW,
 };
 
@@ -57,28 +63,6 @@ function centeredText(cr, value, x, centerY, size, color, weight = Pango.Weight.
     setColor(cr, color);
     cr.moveTo(x - ink.x, Math.round(centerY - ink.y - ink.height / 2));
     PangoCairo.show_layout(cr, layout);
-}
-
-function drawQuotaIcon(cr, x, y, status) {
-    const color = paceColor(status) ?? {red: 210, green: 210, blue: 210};
-    const radius = 14;
-    const start = -Math.PI / 2;
-    cr.setLineWidth(3.2);
-    setColor(cr, color, 0.25);
-    cr.arc(x, y, radius, 0, 2 * Math.PI);
-    cr.stroke();
-    setColor(cr, color);
-    cr.arc(x, y, radius, start, start + (2 * Math.PI * status.remainingPercent) / 100);
-    cr.stroke();
-
-    cr.setLineWidth(2.4);
-    cr.setLineCap(Cairo.LineCap.ROUND);
-    cr.moveTo(x - 4.2, y - 4.4);
-    cr.lineTo(x + 0.4, y);
-    cr.lineTo(x - 4.2, y + 4.4);
-    cr.moveTo(x + 1.8, y + 4.4);
-    cr.lineTo(x + 6.2, y + 4.4);
-    cr.stroke();
 }
 
 function drawPanelStatus(cr) {
@@ -123,18 +107,30 @@ function windowLine(cr, label, value, window, y) {
     const status = quotaStatus({[window]: value}, NOW);
     const color = paceColor(status) ?? {red: 178, green: 178, blue: 178};
     setColor(cr, color);
-    cr.arc(56, y + 14, 6, 0, 2 * Math.PI);
+    cr.arc(80, y + 14, 6, 0, 2 * Math.PI);
     cr.fill();
     const used = displayPercent(value.usedPercent);
     const reference = ` (${used <= status.onTrackPercent ? '≤' : '>'}${formatPercent(status.onTrackPercent)})`;
     text(
         cr,
         `${label}  ${formatPercent(used)}${reference} · ${formatReset(value.resetsAt, NOW, window !== 'fiveHour')}`,
-        78,
+        102,
         y,
         20,
         {red: 205, green: 205, blue: 210},
     );
+}
+
+function providerLine(cr, label, y) {
+    const color = {red: 238, green: 238, blue: 240};
+    setColor(cr, color);
+    cr.setLineWidth(3.2);
+    cr.setLineCap(Cairo.LineCap.ROUND);
+    cr.moveTo(46, y + 15);
+    cr.lineTo(52, y + 21);
+    cr.lineTo(64, y + 9);
+    cr.stroke();
+    text(cr, label, 78, y, 22, color);
 }
 
 if (!ARGV[0]) throw new Error('usage: screenshot.js OUTPUT');
@@ -152,32 +148,49 @@ cr.setSourceRGBA(0.035, 0.035, 0.04, 0.97);
 cr.rectangle(0, 0, WIDTH, 64);
 cr.fill();
 
-const overall = quotaStatus(quota, NOW);
-const overallColor = paceColor(overall);
 cr.setSourceRGBA(0.3, 0.3, 0.32, 0.95);
-roundedRectangle(cr, 343, 7, 201, 50, 25);
+roundedRectangle(cr, 375, 7, 169, 50, 25);
 cr.fill();
-drawQuotaIcon(cr, 377, 32, overall);
-centeredText(cr, formatPercentages(quota), 402, 32, 23, overallColor);
+for (const [prefix, quota, y] of [
+    ['CX', codex, 22],
+    ['CC', claude, 42],
+]) {
+    centeredText(
+        cr,
+        `${prefix} ${formatPercentages(quota)}`,
+        397,
+        y,
+        15,
+        paceColor(quotaStatus(quota, NOW)),
+    );
+}
 drawPanelStatus(cr);
 
 cr.setSourceRGBA(0, 0, 0, 0.32);
-roundedRectangle(cr, 13, 81, 718, 281, 29);
+roundedRectangle(cr, 13, 81, 718, 473, 29);
 cr.fill();
 cr.setSourceRGBA(0.18, 0.18, 0.2, 0.985);
-roundedRectangle(cr, 10, 77, 718, 279, 29);
+roundedRectangle(cr, 10, 77, 718, 471, 29);
 cr.fillPreserve();
 cr.setSourceRGBA(0.32, 0.32, 0.36, 0.55);
 cr.setLineWidth(1.5);
 cr.stroke();
 
-windowLine(cr, '5-hour', quota.fiveHour, 'fiveHour', 112);
-windowLine(cr, 'Weekly', quota.weekly, 'weekly', 177);
+providerLine(cr, 'Codex', 105);
+windowLine(cr, '5-hour', codex.fiveHour, 'fiveHour', 156);
+windowLine(cr, 'Weekly', codex.weekly, 'weekly', 204);
 
-cr.setSourceRGBA(0.38, 0.38, 0.41, 0.5);
-cr.rectangle(48, 251, 642, 1.5);
-cr.fill();
-text(cr, `Refresh (${formatTime(quota.updatedAt)})`, 49, 290, 20, {
+providerLine(cr, 'Claude', 281);
+windowLine(cr, '5-hour', claude.fiveHour, 'fiveHour', 330);
+windowLine(cr, 'Weekly', claude.weekly, 'weekly', 378);
+windowLine(cr, 'Fable weekly', claude.fable, 'fable', 426);
+
+for (const y of [254, 477]) {
+    cr.setSourceRGBA(0.38, 0.38, 0.41, 0.5);
+    cr.rectangle(48, y, 642, 1.5);
+    cr.fill();
+}
+text(cr, `Refresh (${formatTime(Math.max(codex.updatedAt, claude.updatedAt))})`, 49, 502, 20, {
     red: 248,
     green: 248,
     blue: 250,
