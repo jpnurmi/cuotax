@@ -271,6 +271,15 @@ func formatPercent(_ value: Double?) -> String {
     : String(format: "%.1f%%", displayed)
 }
 
+func formatPercentages(_ quota: Quota) -> String {
+  let values = [quota.fiveHour, quota.weekly, quota.fable]
+    .compactMap(\.self)
+    .map(\.usedPercent)
+    .filter(\.isFinite)
+    .map { String(Int(displayPercent($0).rounded())) }
+  return values.isEmpty ? "—" : values.joined(separator: "/") + "%"
+}
+
 func formatTime(_ value: Date?) -> String {
   value?.formatted(date: .omitted, time: .shortened) ?? "—"
 }

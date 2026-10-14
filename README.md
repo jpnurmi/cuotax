@@ -1,10 +1,9 @@
 # CuotaX
 
 A minimal GNOME Shell extension, native macOS menu-bar app, and native Windows
-notification-area app that show the highest active Codex or Claude quota
-percentage. The menu shows the 5-hour and weekly quotas with local reset times,
-plus Claude's Fable weekly quota when available. The indicator includes Fable
-when choosing the highest active quota percentage.
+notification-area app that show Codex or Claude quota usage. GNOME and macOS
+show all available percentages in 5-hour / weekly / Fable weekly order, such as
+`26/6/12%`. The menu shows each quota with local reset times.
 
 | GNOME                                                                                            | macOS                                                                                           | Windows                                                                                                        |
 | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -12,10 +11,12 @@ when choosing the highest active quota percentage.
 
 Enable Codex, Claude, or both using the menu checkboxes. CuotaX remembers the
 enabled providers. GNOME and macOS combine them in one indicator with stacked
-percentages; Windows shows a separate indicator for each. Each provider's checkbox
-shows its update time, with limits and errors beneath it. Each provider refreshes
-independently and has its own quota, errors, and reset notifications. At least one
-provider stays enabled so its menu remains accessible.
+`CX` (Codex) and `CC` (Claude) rows, replacing the icon when both are enabled.
+Each prefix and its percentages share the provider's quota color. Windows shows
+a separate indicator for each. Each provider's checkbox shows its update time,
+with limits and errors beneath it. Each provider refreshes independently and has
+its own quota, errors, and reset notifications. At least one provider stays
+enabled so its menu remains accessible.
 
 Every five minutes and at known reset times, CuotaX reads Codex quota through
 `account/rateLimits/read` from the experimental Codex app-server interface using

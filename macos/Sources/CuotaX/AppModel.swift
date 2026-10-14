@@ -36,8 +36,8 @@ final class AppModel: ObservableObject {
   }
 
   var title: String {
-    guard let percent = quota?.highestPercent else { return error == nil ? "…" : "!" }
-    return "\(Int(displayPercent(percent).rounded()))%"
+    guard let quota else { return error == nil ? "…" : "!" }
+    return formatPercentages(quota)
   }
 
   var status: QuotaStatus {

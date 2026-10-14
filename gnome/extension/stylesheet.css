@@ -10,6 +10,13 @@
   font-size: 0.65em;
 }
 
+.cuotax-update-badge {
+  width: 4px;
+  height: 4px;
+  border-radius: 2px;
+  background-color: #1688f8;
+}
+
 .cuotax-icon {
   width: 16px;
   height: 16px;

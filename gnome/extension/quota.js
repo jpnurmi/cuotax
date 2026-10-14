@@ -99,6 +99,13 @@ export function formatPercent(value) {
     return `${displayed.toFixed(digits)}%`;
 }
 
+export function formatPercentages(quota) {
+    const values = [quota?.fiveHour, quota?.weekly, quota?.fable]
+        .map((value) => displayPercent(value?.usedPercent))
+        .filter((value) => value !== null);
+    return values.length ? `${values.map(Math.round).join('/')}%` : '—';
+}
+
 function dateFrom(value) {
     if (!Number.isFinite(value)) return null;
 

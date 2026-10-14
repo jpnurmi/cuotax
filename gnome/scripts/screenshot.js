@@ -7,6 +7,7 @@ import PangoCairo from 'gi://PangoCairo';
 import {
     displayPercent,
     formatPercent,
+    formatPercentages,
     formatReset,
     formatTime,
     paceColor,
@@ -154,10 +155,10 @@ cr.fill();
 const overall = quotaStatus(quota, NOW);
 const overallColor = paceColor(overall);
 cr.setSourceRGBA(0.3, 0.3, 0.32, 0.95);
-roundedRectangle(cr, 390, 7, 154, 50, 25);
+roundedRectangle(cr, 343, 7, 201, 50, 25);
 cr.fill();
-drawQuotaIcon(cr, 424, 32, overall);
-centeredText(cr, '68%', 449, 32, 23, overallColor);
+drawQuotaIcon(cr, 377, 32, overall);
+centeredText(cr, formatPercentages(quota), 402, 32, 23, overallColor);
 drawPanelStatus(cr);
 
 cr.setSourceRGBA(0, 0, 0, 0.32);

@@ -1,6 +1,7 @@
 import {
     displayPercent,
     formatPercent,
+    formatPercentages,
     formatReset,
     formatTime,
     highestPercent,
@@ -252,4 +253,22 @@ assertEqual(
 assertEqual(
     resetMessage({...previousQuota, ...previousFable, fiveHour: null}, currentQuota),
     'Weekly and Fable weekly quotas reset',
+);
+
+assertEqual(
+    formatPercentages({
+        fiveHour: {usedPercent: 26},
+        weekly: {usedPercent: 6},
+        fable: {usedPercent: 12},
+    }),
+    '26/6/12%',
+);
+assertEqual(formatPercentages(quota), '43/7%');
+assertEqual(formatPercentages(weeklyOnly), '8%');
+assertEqual(formatPercentages({fable: {usedPercent: 12}}), '12%');
+assertEqual(formatPercentages({fiveHour: {usedPercent: -1}, weekly: {usedPercent: 131}}), '0/100%');
+assertEqual(formatPercentages(null), '—');
+assertEqual(
+    formatPercentages({fiveHour: {usedPercent: NaN}, weekly: {usedPercent: Infinity}}),
+    '—',
 );

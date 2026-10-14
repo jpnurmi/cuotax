@@ -325,3 +325,23 @@ import Testing
     resetMessage(previous: all, current: current)
       == "5-hour, weekly and Fable weekly quotas reset")
 }
+
+@Test func compactPercentages() {
+  let now = Date()
+  func quota(_ fiveHour: Double?, _ weekly: Double?, _ fable: Double? = nil) -> Quota {
+    Quota(
+      fiveHour: fiveHour.map { QuotaWindow(usedPercent: $0, resetsAt: nil) },
+      weekly: weekly.map { QuotaWindow(usedPercent: $0, resetsAt: nil) },
+      updatedAt: now,
+      fable: fable.map { QuotaWindow(usedPercent: $0, resetsAt: nil) }
+    )
+  }
+
+  #expect(formatPercentages(quota(26, 6, 12)) == "26/6/12%")
+  #expect(formatPercentages(quota(42.5, 7)) == "43/7%")
+  #expect(formatPercentages(quota(nil, 8)) == "8%")
+  #expect(formatPercentages(quota(nil, nil, 12)) == "12%")
+  #expect(formatPercentages(quota(-1, 131)) == "0/100%")
+  #expect(formatPercentages(quota(nil, nil)) == "—")
+  #expect(formatPercentages(quota(.nan, .infinity)) == "—")
+}

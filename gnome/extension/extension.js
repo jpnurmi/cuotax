@@ -17,6 +17,7 @@ import {UpdateChecker} from './update.js';
 import {
     displayPercent,
     formatPercent,
+    formatPercentages,
     formatReset,
     formatTime,
     highestPercent,
@@ -138,6 +139,11 @@ const CuotaXIndicator = GObject.registerClass(
                 labels.add_child(label);
             }
             box.add_child(labels);
+            this._updateBadge = new St.Widget({
+                style_class: 'cuotax-update-badge',
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+            box.add_child(this._updateBadge);
             this.add_child(box);
 
             this.menu.connect('open-state-changed', (_menu, open) => {
@@ -164,6 +170,8 @@ const CuotaXIndicator = GObject.registerClass(
         render() {
             const states = this._states();
             const stacked = this._selection().size > 1;
+            this._icon.visible = !stacked;
+            this._updateBadge.visible = stacked && this._updateAvailable;
             const names = [];
             let highest = null;
             let percent = -1;
@@ -178,24 +186,29 @@ const CuotaXIndicator = GObject.registerClass(
                 label.set_style_class_name(
                     stacked ? 'cuotax-label cuotax-label-stacked' : 'cuotax-label',
                 );
+                label.x_align = stacked ? Clutter.ActorAlign.START : Clutter.ActorAlign.CENTER;
                 label.set_style(colorStyle(paceColor(status)));
-                label.text = quota
-                    ? displayed === null
-                        ? '—'
-                        : `${Math.round(displayed)}%`
-                    : error
-                      ? '!'
-                      : '…';
+                const text = quota ? formatPercentages(quota) : error ? '!' : '…';
+                const prefix = provider === 'claude' ? 'CC' : 'CX';
+                label.text = stacked ? `${prefix} ${text}` : text;
                 if (highest === null || (used ?? -1) > percent) {
                     highest = quota;
                     percent = used ?? -1;
                 }
                 const title = provider === 'claude' ? 'Claude' : 'Codex';
+                const usage = [
+                    ['5-hour', quota?.fiveHour],
+                    ['weekly', quota?.weekly],
+                    ['Fable weekly', quota?.fable],
+                ]
+                    .filter(([, value]) => Number.isFinite(value?.usedPercent))
+                    .map(([window, value]) => `${window} ${formatPercent(value.usedPercent)} used`)
+                    .join(', ');
                 names.push(
                     quota
                         ? displayed === null
                             ? `${title} unavailable`
-                            : `${title} ${Math.round(displayed)} percent, ${paceLabel(status).toLowerCase()}`
+                            : `${title} ${usage}, ${paceLabel(status).toLowerCase()}`
                         : error
                           ? `${title} unavailable: ${error.message}`
                           : `${title} loading`,

@@ -148,7 +148,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
       status: highest.status,
       color: statusColor(highest.status),
       updateAvailable: updateAvailable,
-      percentages: stacked ? models.map { ($0.title, statusColor($0.status)) } : []
+      percentages: stacked
+        ? models.map { ("\($0.provider == .claude ? "CC" : "CX") \($0.title)", statusColor($0.status)) }
+        : []
     )
     button.attributedTitle = NSAttributedString(
       string: stacked ? "" : highest.title,
@@ -158,8 +160,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
       ]
     )
     let labels = models.map { model in
-      if model.quota != nil {
-        return "\(model.provider.title) \(model.title), \(model.status.paceLabel.lowercased())"
+      if let quota = model.quota {
+        let usage = [("5-hour", quota.fiveHour), ("weekly", quota.weekly), ("Fable weekly", quota.fable)]
+          .compactMap { name, window in
+            window.map { "\(name) \(formatPercent($0.usedPercent)) used" }
+          }
+          .joined(separator: ", ")
+        return "\(model.provider.title) \(usage), \(model.status.paceLabel.lowercased())"
       }
       return model.error.map { "\(model.provider.title) unavailable: \($0.message)" }
         ?? "\(model.provider.title) loading"
@@ -328,46 +335,52 @@ func quotaImage(
   }
   let widths = lines.map { CGFloat(CTLineGetTypographicBounds($0, nil, nil, nil)) }
   let width = ceil(widths.max() ?? 0)
-  let size = NSSize(width: 18 + (lines.isEmpty ? 0 : 4 + width), height: 18)
+  let size = NSSize(width: lines.isEmpty ? 18 : width + (updateAvailable ? 7 : 0), height: 18)
   let image = NSImage(size: size, flipped: false) { _ in
     let center = NSPoint(x: 9, y: 9)
-    let radius = 7.1
+    if lines.isEmpty {
+      let radius = 7.1
 
-    color.withAlphaComponent(0.25).setStroke()
-    let track = NSBezierPath(ovalIn: NSRect(x: 1.9, y: 1.9, width: 14.2, height: 14.2))
-    track.lineWidth = 1.8
-    track.stroke()
+      color.withAlphaComponent(0.25).setStroke()
+      let track = NSBezierPath(ovalIn: NSRect(x: 1.9, y: 1.9, width: 14.2, height: 14.2))
+      track.lineWidth = 1.8
+      track.stroke()
 
-    if let remaining = status.remainingPercent {
+      if let remaining = status.remainingPercent {
+        color.setStroke()
+        let progress = NSBezierPath()
+        progress.appendArc(
+          withCenter: center,
+          radius: radius,
+          startAngle: 90,
+          endAngle: 90 - 360 * displayPercent(remaining) / 100,
+          clockwise: true
+        )
+        progress.lineWidth = 1.8
+        progress.lineCapStyle = .round
+        progress.stroke()
+      }
+
       color.setStroke()
-      let progress = NSBezierPath()
-      progress.appendArc(
-        withCenter: center,
-        radius: radius,
-        startAngle: 90,
-        endAngle: 90 - 360 * displayPercent(remaining) / 100,
-        clockwise: true
-      )
-      progress.lineWidth = 1.8
-      progress.lineCapStyle = .round
-      progress.stroke()
+      let glyph = NSBezierPath()
+      glyph.move(to: NSPoint(x: 6.2, y: 11.4))
+      glyph.line(to: NSPoint(x: 8.6, y: 9))
+      glyph.line(to: NSPoint(x: 6.2, y: 6.6))
+      glyph.move(to: NSPoint(x: 9.4, y: 6.6))
+      glyph.line(to: NSPoint(x: 12.2, y: 6.6))
+      glyph.lineWidth = 1.4
+      glyph.lineCapStyle = .round
+      glyph.lineJoinStyle = .round
+      glyph.stroke()
     }
-
-    color.setStroke()
-    let glyph = NSBezierPath()
-    glyph.move(to: NSPoint(x: 6.2, y: 11.4))
-    glyph.line(to: NSPoint(x: 8.6, y: 9))
-    glyph.line(to: NSPoint(x: 6.2, y: 6.6))
-    glyph.move(to: NSPoint(x: 9.4, y: 6.6))
-    glyph.line(to: NSPoint(x: 12.2, y: 6.6))
-    glyph.lineWidth = 1.4
-    glyph.lineCapStyle = .round
-    glyph.lineJoinStyle = .round
-    glyph.stroke()
 
     if updateAvailable {
       NSColor(srgbRed: 22 / 255, green: 136 / 255, blue: 248 / 255, alpha: 1).setFill()
-      NSBezierPath(ovalIn: NSRect(x: 0, y: 0, width: 5, height: 5)).fill()
+      NSBezierPath(
+        ovalIn: NSRect(
+          x: lines.isEmpty ? 0 : width + 2, y: lines.isEmpty ? 0 : 6.5, width: 5, height: 5
+        )
+      ).fill()
     }
     if let context = NSGraphicsContext.current?.cgContext {
       context.saveGState()
@@ -377,7 +390,7 @@ func quotaImage(
       for (index, line) in lines.enumerated() {
         let bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
         context.textPosition = CGPoint(
-          x: 22 + (width - widths[index]) / 2,
+          x: 0,
           y: center.y + (CGFloat(lines.count - 1) / 2 - CGFloat(index)) * 10 - bounds.midY
         )
         CTLineDraw(line, context)
