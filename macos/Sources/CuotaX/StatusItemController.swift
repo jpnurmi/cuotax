@@ -182,9 +182,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     for provider in Provider.allCases {
       let model = models[provider]
-      let title =
-        model?.quota.map { "\(provider.title) (\(formatTime($0.updatedAt)))" } ?? provider.title
-      let item = actionItem(title, action: #selector(toggleProvider(_:)))
+      let item = actionItem(provider.title, action: #selector(toggleProvider(_:)))
       item.representedObject = provider.rawValue
       item.state = providers.contains(provider) ? .on : .off
       item.isEnabled = !providers.contains(provider) || providers.count > 1
@@ -194,7 +192,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
       }
       menu.addItem(.separator())
     }
-    menu.addItem(actionItem("Refresh", action: #selector(refresh), keyEquivalent: "r"))
+    let updated = models.values.compactMap { $0.quota?.updatedAt }.max()
+    let title = updated.map { "Refresh (\(formatTime($0)))" } ?? "Refresh"
+    menu.addItem(actionItem(title, action: #selector(refresh), keyEquivalent: "r"))
 
     menu.addItem(.separator())
     menu.addItem(actionItem("Quit CuotaX", action: #selector(quit), keyEquivalent: "q"))

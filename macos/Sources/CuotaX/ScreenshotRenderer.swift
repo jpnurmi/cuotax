@@ -6,7 +6,7 @@ import Foundation
 @MainActor
 enum ScreenshotRenderer {
   private static let width = 740
-  private static let height = 442
+  private static let height = 381
   private static let labelColor = NSColor(
     srgbRed: 0.92, green: 0.92, blue: 0.94, alpha: 1)
   private static let secondaryColor = NSColor(
@@ -79,7 +79,7 @@ enum ScreenshotRenderer {
     icon.draw(in: topRect(x: 477, y: 9, width: 18, height: 18))
     drawText(formatPercentages(quota), x: 501, y: 9, size: 14, color: color)
 
-    let menu = topRect(x: 174, y: 42, width: 544, height: 386)
+    let menu = topRect(x: 174, y: 42, width: 544, height: 325)
     let shadow = NSShadow()
     shadow.shadowBlurRadius = 18
     shadow.shadowOffset = NSSize(width: 0, height: -5)
@@ -93,18 +93,16 @@ enum ScreenshotRenderer {
     drawWindow("Weekly", value: quota.weekly!, fiveHour: false, y: 126)
     separator(y: 177)
     drawText(
-      "Updated \(formatTime(quota.updatedAt))",
+      "Refresh (\(formatTime(quota.updatedAt)))",
       x: 207,
       y: 198,
       size: 15,
-      color: secondaryColor
+      color: labelColor
     )
+    drawText("⌘R", x: 668, y: 198, size: 15, color: secondaryColor)
     separator(y: 237)
-    drawText("Refresh", x: 207, y: 258, size: 15, color: labelColor)
-    drawText("⌘R", x: 668, y: 258, size: 15, color: secondaryColor)
-    separator(y: 298)
-    drawText("Quit CuotaX", x: 207, y: 319, size: 15, color: labelColor)
-    drawText("⌘Q", x: 668, y: 319, size: 15, color: secondaryColor)
+    drawText("Quit CuotaX", x: 207, y: 258, size: 15, color: labelColor)
+    drawText("⌘Q", x: 668, y: 258, size: 15, color: secondaryColor)
   }
 
   private static func drawWindow(

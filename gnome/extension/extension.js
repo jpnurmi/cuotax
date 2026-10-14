@@ -258,7 +258,12 @@ const CuotaXIndicator = GObject.registerClass(
         }
 
         _addRefresh() {
-            const refresh = new PopupMenu.PopupMenuItem('Refresh');
+            const updates = [...this._states().values()]
+                .map(({quota}) => quota?.updatedAt)
+                .filter(Number.isFinite);
+            const refresh = new PopupMenu.PopupMenuItem(
+                updates.length ? `Refresh (${formatTime(Math.max(...updates))})` : 'Refresh',
+            );
             refresh.connect('activate', () => this._onRefresh());
             this.menu.addMenuItem(refresh);
         }
@@ -268,9 +273,7 @@ const CuotaXIndicator = GObject.registerClass(
             for (const provider of ['codex', 'claude']) {
                 const state = this._states().get(provider);
                 const title = provider === 'claude' ? 'Claude' : 'Codex';
-                const item = new PopupMenu.PopupMenuItem(
-                    state?.quota ? `${title} (${formatTime(state.quota.updatedAt)})` : title,
-                );
+                const item = new PopupMenu.PopupMenuItem(title);
                 const providers = this._selection();
                 item.setOrnament(
                     providers.has(provider) ? PopupMenu.Ornament.CHECK : PopupMenu.Ornament.NONE,

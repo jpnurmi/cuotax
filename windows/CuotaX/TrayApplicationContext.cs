@@ -353,10 +353,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         foreach (var provider in Enum.GetValues<Provider>())
         {
             _providers.TryGetValue(provider, out var state);
-            var title = state?.Quota is { } current
-                ? $"{provider} ({QuotaFormatting.Time(current.UpdatedAt)})"
-                : provider.ToString();
-            var item = new ToolStripMenuItem(title)
+            var item = new ToolStripMenuItem(provider.ToString())
             {
                 Checked = _providers.ContainsKey(provider),
                 Enabled = !_providers.ContainsKey(provider) || _providers.Count > 1,
@@ -400,7 +397,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _menu.Items.Add(new ToolStripSeparator());
         }
 
-        var refresh = new ToolStripMenuItem("Refresh");
+        var updated = _providers.Values.Select(state => state.Quota?.UpdatedAt).Max();
+        var refresh = new ToolStripMenuItem(
+            updated is { } time ? $"Refresh ({QuotaFormatting.Time(time)})" : "Refresh"
+        );
         refresh.Click += (_, _) => Refresh();
         _menu.Items.Add(refresh);
 

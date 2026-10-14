@@ -48,7 +48,7 @@ internal static class ScreenshotRenderer
 
     private static void DrawMenu(Graphics graphics)
     {
-        var bounds = new RectangleF(165, 35, 535, 344);
+        var bounds = new RectangleF(165, 98, 535, 281);
         using (var shadowPath = RoundedRectangle(
             new RectangleF(bounds.X + 4, bounds.Y + 5, bounds.Width, bounds.Height),
             10
@@ -65,12 +65,10 @@ internal static class ScreenshotRenderer
             graphics.DrawPath(border, path);
         }
 
-        DrawWindow(graphics, "5-hour", Fixture.FiveHour!, true, 67);
-        DrawWindow(graphics, "Weekly", Fixture.Weekly!, false, 113);
-        Separator(graphics, 162);
-        DrawText(graphics, $"Updated {Now:HH:mm}", 190, 184, Color.FromArgb(88, 88, 88));
-        Separator(graphics, 224);
-        DrawText(graphics, "Refresh", 190, 248, Color.FromArgb(30, 30, 30));
+        DrawWindow(graphics, "5-hour", Fixture.FiveHour!, true, 130);
+        DrawWindow(graphics, "Weekly", Fixture.Weekly!, false, 176);
+        Separator(graphics, 225);
+        DrawText(graphics, $"Refresh ({QuotaFormatting.Time(Fixture.UpdatedAt)})", 190, 247, Color.FromArgb(30, 30, 30));
         Separator(graphics, 287);
         DrawText(graphics, "Quit CuotaX", 190, 311, Color.FromArgb(30, 30, 30));
     }

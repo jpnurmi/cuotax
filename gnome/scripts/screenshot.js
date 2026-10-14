@@ -15,7 +15,7 @@ import {
 } from '../extension/quota.js';
 
 const WIDTH = 740;
-const HEIGHT = 442;
+const HEIGHT = 369;
 const NOW = Date.parse('2026-08-28T12:23:00Z');
 const quota = {
     fiveHour: {usedPercent: 68, resetsAt: Date.parse('2026-08-28T14:53:00Z')},
@@ -162,10 +162,10 @@ centeredText(cr, formatPercentages(quota), 402, 32, 23, overallColor);
 drawPanelStatus(cr);
 
 cr.setSourceRGBA(0, 0, 0, 0.32);
-roundedRectangle(cr, 13, 81, 718, 354, 29);
+roundedRectangle(cr, 13, 81, 718, 281, 29);
 cr.fill();
 cr.setSourceRGBA(0.18, 0.18, 0.2, 0.985);
-roundedRectangle(cr, 10, 77, 718, 352, 29);
+roundedRectangle(cr, 10, 77, 718, 279, 29);
 cr.fillPreserve();
 cr.setSourceRGBA(0.32, 0.32, 0.36, 0.55);
 cr.setLineWidth(1.5);
@@ -177,11 +177,10 @@ windowLine(cr, 'Weekly', quota.weekly, 'weekly', 177);
 cr.setSourceRGBA(0.38, 0.38, 0.41, 0.5);
 cr.rectangle(48, 251, 642, 1.5);
 cr.fill();
-text(cr, `Updated ${formatTime(quota.updatedAt)}`, 49, 290, 20, {
-    red: 190,
-    green: 190,
-    blue: 195,
+text(cr, `Refresh (${formatTime(quota.updatedAt)})`, 49, 290, 20, {
+    red: 248,
+    green: 248,
+    blue: 250,
 });
-text(cr, 'Refresh', 49, 363, 20, {red: 248, green: 248, blue: 250});
 
 surface.writeToPNG(ARGV[0]);
