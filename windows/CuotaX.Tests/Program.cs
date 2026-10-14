@@ -5,6 +5,8 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using CuotaX;
 
 if (args is ["--fixture", var fixture, ..])
@@ -30,6 +32,9 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("Claude request errors", TestClaudeErrors),
     ("Claude status-line watcher", TestClaudeWatcher),
     ("Claude Fable usage", TestClaudeFable),
+    ("Claude login renewal", TestClaudeRenewal),
+    ("Claude login recovery", TestClaudeRecovery),
+    ("Claude login concurrency", TestClaudeConcurrentRenewal),
 };
 
 if (Environment.GetEnvironmentVariable("CODEX_TEST_LIVE") == "1")
@@ -550,12 +555,208 @@ static Task TestClaudeFable()
     return Task.CompletedTask;
 }
 
-internal sealed class ClaudeHandler(HttpStatusCode status) : HttpMessageHandler
+static async Task TestClaudeRenewal()
+{
+    var directory = Path.Combine(Path.GetTempPath(), $"cuotax-{Guid.NewGuid()}");
+    Directory.CreateDirectory(directory);
+    var path = Path.Combine(directory, ".credentials.json");
+    try
+    {
+        await File.WriteAllTextAsync(path, """
+            {"other":{"preserved":true},"claudeAiOauth":{"accessToken":"old","refreshToken":"refresh","expiresAt":1,"scopes":["user:profile","user:inference"],"clientId":"fixture-client","subscriptionType":"max"}}
+            """);
+        var posts = 0;
+        var rejected = false;
+        var switched = false;
+        var handler = new ClaudeHandler(HttpStatusCode.OK, async (request, _) =>
+        {
+            if (request.Method == HttpMethod.Post)
+            {
+                Equal("https://platform.claude.com/v1/oauth/token", request.RequestUri?.AbsoluteUri);
+                Equal("application/json", request.Content?.Headers.ContentType?.MediaType);
+                var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync())!.AsObject();
+                Equal("refresh_token", body["grant_type"]!.GetValue<string>());
+                Equal(posts == 0 ? "refresh" : "rotated", body["refresh_token"]!.GetValue<string>());
+                Equal("fixture-client", body["client_id"]!.GetValue<string>());
+                Equal("user:profile user:inference", body["scope"]!.GetValue<string>());
+                posts++;
+                var current = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+                current["other"]!["changed"] = true;
+                if (switched)
+                {
+                    current["claudeAiOauth"]!["accessToken"] = "another-login";
+                    current["claudeAiOauth"]!["refreshToken"] = "another-refresh";
+                }
+                await File.WriteAllTextAsync(path, current.ToJsonString());
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent($$"""{"access_token":"renewed-{{posts}}","refresh_token":"rotated","expires_in":3600}"""),
+                };
+            }
+            if (rejected)
+            {
+                rejected = false;
+                return new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = new StringContent("{}") };
+            }
+            Equal(switched ? "another-login" : $"renewed-{posts}", request.Headers.Authorization?.Parameter);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"five_hour":{"utilization":42}}"""),
+            };
+        });
+        using var client = new ClaudeClient(path, handler);
+        Equal(42d, (await client.ReadQuotaAsync()).FiveHour?.UsedPercent);
+        Equal(1, posts);
+        var saved = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        Equal("rotated", saved["claudeAiOauth"]!["refreshToken"]!.GetValue<string>());
+        Equal("max", saved["claudeAiOauth"]!["subscriptionType"]!.GetValue<string>());
+        True(saved["claudeAiOauth"]!["expiresAt"]!.GetValue<double>() > DateTimeOffset.Now.ToUnixTimeMilliseconds());
+        True(saved["other"]!["preserved"]!.GetValue<bool>());
+        True(saved["other"]!["changed"]!.GetValue<bool>());
+        Equal(42d, (await client.ReadQuotaAsync()).FiveHour?.UsedPercent);
+        Equal(1, posts);
+        rejected = true;
+        Equal(42d, (await client.ReadQuotaAsync()).FiveHour?.UsedPercent);
+        Equal(2, posts);
+        rejected = true;
+        switched = true;
+        Equal(42d, (await client.ReadQuotaAsync()).FiveHour?.UsedPercent);
+        saved = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        Equal("another-refresh", saved["claudeAiOauth"]!["refreshToken"]!.GetValue<string>());
+        True(!Directory.Exists(Path.Combine(directory, ".oauth_refresh.lock")));
+        Equal(1, Directory.GetFiles(directory).Length);
+    }
+    finally
+    {
+        Directory.Delete(directory, recursive: true);
+    }
+}
+
+static async Task TestClaudeRecovery()
+{
+    var directory = Path.Combine(Path.GetTempPath(), $"cuotax-{Guid.NewGuid()}");
+    Directory.CreateDirectory(directory);
+    var path = Path.Combine(directory, ".credentials.json");
+    const string credentials = """{"claudeAiOauth":{"accessToken":"old","refreshToken":"refresh","expiresAt":1}}""";
+    try
+    {
+        foreach (var (status, data) in new[]
+        {
+            (HttpStatusCode.BadRequest, """{"error":"invalid_grant"}"""),
+            (HttpStatusCode.ServiceUnavailable, "unavailable"),
+            (HttpStatusCode.OK, "null"),
+            (HttpStatusCode.OK, """{"access_token":"new","expires_in":0}"""),
+            (HttpStatusCode.OK, """{"access_token":"new","expires_in":true}"""),
+            (HttpStatusCode.OK, """{"access_token":"new","expires_in":3600,"refresh_token":null}"""),
+        })
+        {
+            await File.WriteAllTextAsync(path, credentials);
+            var handler = new ClaudeHandler(HttpStatusCode.OK, (_, _) => Task.FromResult(new HttpResponseMessage(status)
+            {
+                Content = new StringContent(data),
+            }));
+            using var client = new ClaudeClient(path, handler);
+            try
+            {
+                await client.ReadQuotaAsync();
+                throw new Exception("Expected renewal failure");
+            }
+            catch (BackendException error)
+            {
+                Equal(status == HttpStatusCode.BadRequest ? "Claude login expired or unavailable" : "Claude login renewal failed", error.Message);
+            }
+            Equal(credentials, await File.ReadAllTextAsync(path));
+            True(!Directory.Exists(Path.Combine(directory, ".oauth_refresh.lock")));
+        }
+        var calls = 0;
+        var unauthorized = new ClaudeHandler(HttpStatusCode.OK, (request, _) =>
+        {
+            calls++;
+            return Task.FromResult(new HttpResponseMessage(request.Method == HttpMethod.Post ? HttpStatusCode.OK : HttpStatusCode.Unauthorized)
+            {
+                Content = new StringContent(request.Method == HttpMethod.Post ? """{"access_token":"new","expires_in":3600}""" : "{}"),
+            });
+        });
+        await File.WriteAllTextAsync(path, credentials.Replace("\"expiresAt\":1", $"\"expiresAt\":{DateTimeOffset.Now.AddHours(1).ToUnixTimeMilliseconds()}"));
+        using var rejected = new ClaudeClient(path, unauthorized);
+        try
+        {
+            await rejected.ReadQuotaAsync();
+            throw new Exception("Expected rejected login");
+        }
+        catch (BackendException error)
+        {
+            Equal("Claude login expired or unavailable", error.Message);
+        }
+        Equal(3, calls);
+        var saved = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        Equal("refresh", saved["claudeAiOauth"]!["refreshToken"]!.GetValue<string>());
+    }
+    finally
+    {
+        Directory.Delete(directory, recursive: true);
+    }
+}
+
+static async Task TestClaudeConcurrentRenewal()
+{
+    var directory = Path.Combine(Path.GetTempPath(), $"cuotax-{Guid.NewGuid()}");
+    Directory.CreateDirectory(directory);
+    var path = Path.Combine(directory, ".credentials.json");
+    try
+    {
+        await File.WriteAllTextAsync(path, """{"claudeAiOauth":{"accessToken":"old","refreshToken":"refresh","expiresAt":1}}""");
+        var posts = 0;
+        var handler = new ClaudeHandler(HttpStatusCode.OK, async (request, cancellationToken) =>
+        {
+            if (request.Method == HttpMethod.Post)
+            {
+                Interlocked.Increment(ref posts);
+                await Task.Delay(100, cancellationToken);
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"access_token":"new","refresh_token":"rotated","expires_in":3600}"""),
+                };
+            }
+            Equal("new", request.Headers.Authorization?.Parameter);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"five_hour":{"utilization":42}}"""),
+            };
+        });
+        using var first = new ClaudeClient(path, handler);
+        using var second = new ClaudeClient(path, handler);
+        var results = await Task.WhenAll(first.ReadQuotaAsync(), second.ReadQuotaAsync());
+        Equal(42d, results[0].FiveHour?.UsedPercent);
+        Equal(42d, results[1].FiveHour?.UsedPercent);
+        Equal(1, posts);
+        var lockPath = Path.Combine(directory, ".oauth_refresh.lock");
+        True(!Directory.Exists(lockPath));
+        var saved = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        saved["claudeAiOauth"]!["expiresAt"] = 1;
+        await File.WriteAllTextAsync(path, saved.ToJsonString());
+        Directory.CreateDirectory(lockPath);
+        Directory.SetLastWriteTimeUtc(lockPath, DateTime.UtcNow.AddMinutes(-2));
+        Equal(42d, (await first.ReadQuotaAsync()).FiveHour?.UsedPercent);
+        True(!Directory.Exists(lockPath));
+    }
+    finally
+    {
+        Directory.Delete(directory, recursive: true);
+    }
+}
+
+internal sealed class ClaudeHandler(HttpStatusCode status, Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? handle = null) : HttpMessageHandler
 {
     internal int Requests { get; private set; }
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        if (handle is not null)
+        {
+            Requests++;
+            return handle(request, cancellationToken);
+        }
         if (request.RequestUri?.AbsoluteUri != "https://api.anthropic.com/api/oauth/usage"
             || request.Headers.Authorization?.Scheme != "Bearer"
             || request.Headers.GetValues("anthropic-beta").Single() != "oauth-2025-04-20")

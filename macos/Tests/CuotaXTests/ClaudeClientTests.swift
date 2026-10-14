@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
+import Security
 import Testing
 
 @testable import CuotaX
@@ -269,6 +270,233 @@ private let claudeUsage = Data(
   #expect(only.fable?.usedPercent == 95)
   #expect(only.fable?.resetsAt == nil)
   #expect(try ClaudeClient.parseQuota(claudeUsage).fable == nil)
+}
+
+@Test func renewsClaudeLogin() async throws {
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let url = directory.appendingPathComponent(".credentials.json")
+  try claudeCredentials.write(to: url)
+  let loader = ClaudeRenewalLoader(directory: directory)
+  let client = ClaudeClient(
+    load: { try await loader.load($0) }, cacheURL: nil, credentialsDirectory: directory)
+  #expect(try await client.readQuota().fiveHour?.usedPercent == 42)
+  #expect(await loader.postCount == 1)
+  var saved = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+  var oauth = saved["claudeAiOauth"] as! [String: Any]
+  #expect(oauth["accessToken"] as? String == "renewed-1")
+  #expect(oauth["refreshToken"] as? String == "rotated")
+  #expect(oauth["subscriptionType"] as? String == "max")
+  #expect((oauth["expiresAt"] as! Double) > Date().timeIntervalSince1970 * 1000)
+  #expect((saved["other"] as! [String: Bool])["preserved"] == true)
+  #expect((saved["other"] as! [String: Bool])["changed"] == true)
+  #expect(try await client.readQuota().fiveHour?.usedPercent == 42)
+  #expect(await loader.postCount == 1)
+  await loader.rejectUsage()
+  #expect(try await client.readQuota().fiveHour?.usedPercent == 42)
+  #expect(await loader.postCount == 2)
+  await loader.rejectUsage(switchLogin: true)
+  #expect(try await client.readQuota().fiveHour?.usedPercent == 42)
+  saved = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+  oauth = saved["claudeAiOauth"] as! [String: Any]
+  #expect(oauth["refreshToken"] as? String == "another-refresh")
+  #expect(
+    try FileManager.default.contentsOfDirectory(atPath: directory.path) == [".credentials.json"])
+}
+
+@Test func preservesKeychainLoginWhenRenewing() async throws {
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let query: [String: Any] = [
+    kSecClass as String: kSecClassGenericPassword,
+    kSecAttrService as String: ClaudeClient.keychainService(configDirectory: directory.path),
+    kSecAttrAccount as String: "CuotaXTest",
+  ]
+  var item = query
+  item[kSecValueData as String] = claudeCredentials
+  #expect(SecItemAdd(item as CFDictionary, nil) == errSecSuccess)
+  defer { _ = SecItemDelete(query as CFDictionary) }
+  let loader = ClaudeRenewalLoader()
+  let client = ClaudeClient(
+    load: { try await loader.load($0) }, cacheURL: nil, credentialsDirectory: directory)
+  #expect(try await client.readQuota().fiveHour?.usedPercent == 42)
+  var read = query
+  read[kSecReturnData as String] = true
+  var result: CFTypeRef?
+  #expect(SecItemCopyMatching(read as CFDictionary, &result) == errSecSuccess)
+  let data = try #require(result as? Data)
+  let saved = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+  let oauth = saved["claudeAiOauth"] as! [String: Any]
+  #expect(oauth["refreshToken"] as? String == "rotated")
+  #expect((saved["other"] as! [String: Bool])["preserved"] == true)
+  #expect(
+    !FileManager.default.fileExists(
+      atPath: directory.appendingPathComponent(".credentials.json").path))
+}
+
+@Test func reportsClaudeRenewalErrors() async throws {
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let url = directory.appendingPathComponent(".credentials.json")
+  for (status, data) in [
+    (400, "{\"error\":\"invalid_grant\"}"), (503, "unavailable"), (200, "null"),
+    (200, "{\"access_token\":\"new\",\"expires_in\":0}"),
+    (200, "{\"access_token\":\"new\",\"expires_in\":true}"),
+    (200, "{\"access_token\":\"new\",\"expires_in\":3600,\"refresh_token\":null}"),
+  ] {
+    try claudeCredentials.write(to: url)
+    let loader = ClaudeRenewalLoader(tokenStatus: status, tokenResponse: data)
+    let client = ClaudeClient(
+      load: { try await loader.load($0) }, cacheURL: nil, credentialsDirectory: directory)
+    do {
+      _ = try await client.readQuota()
+      Issue.record("Expected renewal failure")
+    } catch let error as BackendError {
+      #expect(
+        error.message
+          == (status == 400 ? "Claude login expired or unavailable" : "Claude login renewal failed")
+      )
+    }
+    #expect(try Data(contentsOf: url) == claudeCredentials)
+    #expect(
+      !FileManager.default.fileExists(
+        atPath: directory.appendingPathComponent(".oauth_refresh.lock").path))
+  }
+  var credentials = try JSONSerialization.jsonObject(with: claudeCredentials) as! [String: Any]
+  var oauth = credentials["claudeAiOauth"] as! [String: Any]
+  oauth["expiresAt"] = Date().timeIntervalSince1970 * 1000 + 3600_000
+  credentials["claudeAiOauth"] = oauth
+  try JSONSerialization.data(withJSONObject: credentials).write(to: url)
+  let loader = ClaudeRenewalLoader(usageStatus: 401)
+  let client = ClaudeClient(
+    load: { try await loader.load($0) }, cacheURL: nil, credentialsDirectory: directory)
+  do {
+    _ = try await client.readQuota()
+    Issue.record("Expected rejected login")
+  } catch let error as BackendError {
+    #expect(error.message == "Claude login expired or unavailable")
+  }
+  #expect(await loader.postCount == 1)
+  #expect(await loader.getCount == 2)
+}
+
+@Test func concurrentClaudeRenewalRunsOnce() async throws {
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let url = directory.appendingPathComponent(".credentials.json")
+  try claudeCredentials.write(to: url)
+  let loader = ClaudeRenewalLoader()
+  let client = ClaudeClient(
+    load: { try await loader.load($0) }, cacheURL: nil, credentialsDirectory: directory)
+  async let first = client.readQuota()
+  async let second = client.readQuota()
+  let quotas = try await (first, second)
+  #expect(quotas.0.fiveHour?.usedPercent == 42)
+  #expect(quotas.1.fiveHour?.usedPercent == 42)
+  #expect(await loader.postCount == 1)
+  var saved = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+  var oauth = saved["claudeAiOauth"] as! [String: Any]
+  oauth["expiresAt"] = 1
+  saved["claudeAiOauth"] = oauth
+  try JSONSerialization.data(withJSONObject: saved).write(to: url)
+  let lock = directory.appendingPathComponent(".oauth_refresh.lock")
+  try FileManager.default.createDirectory(at: lock, withIntermediateDirectories: false)
+  try FileManager.default.setAttributes(
+    [.modificationDate: Date().addingTimeInterval(-120)], ofItemAtPath: lock.path)
+  #expect(try await client.readQuota().fiveHour?.usedPercent == 42)
+  #expect(!FileManager.default.fileExists(atPath: lock.path))
+}
+
+private let claudeCredentials = Data(
+  """
+  {"other":{"preserved":true},"claudeAiOauth":{"accessToken":"old","refreshToken":"refresh","expiresAt":1,"scopes":["user:profile","user:inference"],"clientId":"fixture-client","subscriptionType":"max"}}
+  """.utf8
+)
+
+private actor ClaudeRenewalLoader {
+  let directory: URL?
+  let tokenStatus: Int
+  let tokenResponse: String?
+  let usageStatus: Int
+  var postCount = 0
+  var getCount = 0
+  private var rejected = false
+  private var switched = false
+
+  init(
+    directory: URL? = nil, tokenStatus: Int = 200, tokenResponse: String? = nil,
+    usageStatus: Int = 200
+  ) {
+    self.directory = directory
+    self.tokenStatus = tokenStatus
+    self.tokenResponse = tokenResponse
+    self.usageStatus = usageStatus
+  }
+
+  func rejectUsage(switchLogin: Bool = false) {
+    rejected = true
+    switched = switchLogin
+  }
+
+  func load(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    if request.httpMethod == "POST" {
+      postCount += 1
+      #expect(request.url?.absoluteString == "https://platform.claude.com/v1/oauth/token")
+      #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+      let body =
+        try JSONSerialization.jsonObject(with: #require(request.httpBody)) as! [String: Any]
+      #expect(body["grant_type"] as? String == "refresh_token")
+      #expect(body["refresh_token"] as? String == (postCount == 1 ? "refresh" : "rotated"))
+      #expect(body["client_id"] as? String == "fixture-client")
+      #expect(body["scope"] as? String == "user:profile user:inference")
+      try await Task.sleep(nanoseconds: 100_000_000)
+      if let directory {
+        let url = directory.appendingPathComponent(".credentials.json")
+        var credentials =
+          try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+        var other = credentials["other"] as! [String: Bool]
+        other["changed"] = true
+        credentials["other"] = other
+        if switched {
+          var oauth = credentials["claudeAiOauth"] as! [String: Any]
+          oauth["accessToken"] = "another-login"
+          oauth["refreshToken"] = "another-refresh"
+          credentials["claudeAiOauth"] = oauth
+        }
+        try JSONSerialization.data(withJSONObject: credentials).write(to: url, options: .atomic)
+      }
+      let data =
+        tokenResponse
+        ?? "{\"access_token\":\"renewed-\(postCount)\",\"refresh_token\":\"rotated\",\"expires_in\":3600}"
+      return (
+        Data(data.utf8),
+        HTTPURLResponse(
+          url: request.url!, statusCode: tokenStatus, httpVersion: nil, headerFields: nil)!
+      )
+    }
+    getCount += 1
+    if rejected {
+      rejected = false
+      return (
+        Data(),
+        HTTPURLResponse(url: request.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!
+      )
+    }
+    if usageStatus == 200 {
+      #expect(
+        request.value(forHTTPHeaderField: "Authorization")
+          == "Bearer \(switched ? "another-login" : "renewed-\(postCount)")")
+    }
+    return (
+      claudeUsage,
+      HTTPURLResponse(
+        url: request.url!, statusCode: usageStatus, httpVersion: nil, headerFields: nil)!
+    )
+  }
 }
 
 private actor QuotaGate {

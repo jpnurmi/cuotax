@@ -27,11 +27,10 @@ For Claude, CuotaX prefers status-line data from the last five minutes, then
 falls back to the undocumented Claude Code OAuth usage endpoint using the
 existing login. It reads credentials from the macOS Keychain or
 `~/.claude/.credentials.json` on Linux and Windows, and supports
-`CLAUDE_CONFIG_DIR` and `CLAUDE_CODE_OAUTH_TOKEN`. On Linux, CuotaX automatically
-renews the saved Claude Code login in the background and saves rotated tokens
-back to the credential file. Log in again only if the saved login cannot be
-renewed. On macOS and Windows, open Claude Code to renew an expired login.
-Neither backend starts a model turn.
+`CLAUDE_CONFIG_DIR` and `CLAUDE_CODE_OAUTH_TOKEN`. CuotaX automatically renews the
+saved Claude Code login in the background and saves rotated tokens back to the
+Keychain or credential file. Log in again only if the saved login cannot be
+renewed. Neither backend starts a model turn.
 
 ## Requirements
 
