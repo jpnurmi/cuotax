@@ -298,3 +298,30 @@ import Testing
   #expect(severity(70) == .warning)
   #expect(severity(90) == .critical)
 }
+
+@Test func fableQuota() {
+  let now = Date(timeIntervalSince1970: 1_777_000_000)
+  let quota = Quota(
+    fiveHour: QuotaWindow(usedPercent: 20, resetsAt: now.addingTimeInterval(2 * 60 * 60)),
+    weekly: QuotaWindow(usedPercent: 5, resetsAt: now.addingTimeInterval(6 * 24 * 60 * 60)),
+    updatedAt: now,
+    fable: QuotaWindow(usedPercent: 95, resetsAt: now.addingTimeInterval(6 * 24 * 60 * 60))
+  )
+  #expect(quota.highestPercent == 95)
+  #expect(quota.status(now: now).window == "Fable weekly")
+  #expect(quota.status(now: now).level == .critical)
+
+  let reset = now.addingTimeInterval(60)
+  let previous = Quota(
+    fiveHour: nil, weekly: nil, updatedAt: now,
+    fable: QuotaWindow(usedPercent: 95, resetsAt: reset))
+  let current = Quota(fiveHour: nil, weekly: nil, updatedAt: reset)
+  #expect(previous.nextReset(after: now) == reset)
+  #expect(previous.nextReset(after: reset) == nil)
+  #expect(resetMessage(previous: previous, current: current) == "Fable weekly quota reset")
+  let all = Quota(
+    fiveHour: previous.fable, weekly: previous.fable, updatedAt: now, fable: previous.fable)
+  #expect(
+    resetMessage(previous: all, current: current)
+      == "5-hour, weekly and Fable weekly quotas reset")
+}

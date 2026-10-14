@@ -368,6 +368,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
             {
                 AddWindow("5-hour", quota.FiveHour, fiveHour: true);
                 AddWindow("Weekly", quota.Weekly, fiveHour: false);
+                if (quota.Fable is { } fable)
+                {
+                    AddWindow("Fable weekly", fable, fiveHour: false);
+                }
                 if (state.Error is { } error)
                 {
                     AddInfo("Refresh failed · showing previous data");

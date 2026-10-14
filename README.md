@@ -2,7 +2,9 @@
 
 A minimal GNOME Shell extension, native macOS menu-bar app, and native Windows
 notification-area app that show the highest active Codex or Claude quota
-percentage. The menu shows the 5-hour and weekly quotas with local reset times.
+percentage. The menu shows the 5-hour and weekly quotas with local reset times,
+plus Claude's Fable weekly quota when available. The indicator includes Fable
+when choosing the highest active quota percentage.
 
 | GNOME                                                                                            | macOS                                                                                           | Windows                                                                                                        |
 | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |

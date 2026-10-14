@@ -270,6 +270,7 @@ const CuotaXIndicator = GObject.registerClass(
             if (quota) {
                 add(this._quotaItem('5-hour', quota.fiveHour, 'fiveHour'));
                 add(this._quotaItem('Weekly', quota.weekly, 'weekly'));
+                if (quota.fable) add(this._quotaItem('Fable weekly', quota.fable, 'fable'));
                 if (error) {
                     add(infoItem('Refresh failed · showing previous data', 'cuotax-error'));
                     add(infoItem(error.diagnostic, 'cuotax-diagnostic'));

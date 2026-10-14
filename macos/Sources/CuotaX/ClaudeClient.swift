@@ -74,13 +74,16 @@ struct ClaudeClient: Sendable {
     }
     let fiveHour = usage.fiveHour?.window ?? usage.limits?.first { $0.kind == "session" }?.window
     let weekly = usage.sevenDay?.window ?? usage.limits?.first { $0.kind == "weekly_all" }?.window
-    guard fiveHour != nil || weekly != nil else {
+    let fable = usage.limits?.first {
+      $0.kind == "weekly_scoped" && $0.scope?.model?.displayName == "Fable"
+    }?.window
+    guard fiveHour != nil || weekly != nil || fable != nil else {
       throw BackendError(
         message: "Claude returned no quota limits",
         diagnostic: "Subscription usage requires a Claude Code login with a Claude plan"
       )
     }
-    return Quota(fiveHour: fiveHour, weekly: weekly, updatedAt: updatedAt)
+    return Quota(fiveHour: fiveHour, weekly: weekly, updatedAt: updatedAt, fable: fable)
   }
 
   static func parseToken(_ data: Data, now: Date = Date()) throws -> String {
@@ -194,6 +197,7 @@ struct ClaudeClient: Sendable {
     let kind: String
     let percent: Double?
     let resetsAt: String?
+    let scope: Scope?
 
     var window: QuotaWindow? {
       quotaWindow(percent: percent, reset: resetsAt)
@@ -203,6 +207,19 @@ struct ClaudeClient: Sendable {
       case kind
       case percent
       case resetsAt = "resets_at"
+      case scope
+    }
+  }
+
+  private struct Scope: Decodable {
+    let model: Model?
+  }
+
+  private struct Model: Decodable {
+    let displayName: String?
+
+    enum CodingKeys: String, CodingKey {
+      case displayName = "display_name"
     }
   }
 

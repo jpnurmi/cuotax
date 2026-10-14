@@ -7,6 +7,7 @@ import {
     nextReset,
     paceColor,
     paceLabel,
+    parseClaudeQuota,
     parseQuota,
     quotaStatus,
     resetMessage,
@@ -213,3 +214,42 @@ const weeklyOnly = parseQuota({
 });
 assertEqual(weeklyOnly.fiveHour, null);
 assertEqual(weeklyOnly.weekly.usedPercent, 8);
+
+const fableQuota = parseClaudeQuota({
+    five_hour: {utilization: 20, resets_at: new Date(statusNow + 2 * 60 * 60 * 1000).toISOString()},
+    seven_day: {
+        utilization: 5,
+        resets_at: new Date(statusNow + 6 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    limits: [
+        {
+            kind: 'weekly_scoped',
+            percent: 95,
+            resets_at: new Date(statusNow + 6 * 24 * 60 * 60 * 1000).toISOString(),
+            scope: {model: {display_name: 'Fable'}},
+        },
+    ],
+});
+assertEqual(highestPercent(fableQuota), 95);
+status = quotaStatus(fableQuota, statusNow);
+assertEqual(status.window, 'Fable weekly');
+assertEqual(status.level, 'critical');
+assertEqual(nextReset({fable: {usedPercent: 95, resetsAt: resetAt}}, beforeReset), resetAt);
+assertEqual(nextReset({fable: {usedPercent: 95, resetsAt: resetAt}}, resetAt), null);
+const previousFable = {
+    fable: {usedPercent: 95, resetsAt: resetAt},
+    updatedAt: beforeReset,
+};
+assertEqual(resetMessage(previousFable, currentQuota), 'Fable weekly quota reset');
+assertEqual(
+    resetMessage({...previousQuota, ...previousFable}, currentQuota),
+    '5-hour, weekly and Fable weekly quotas reset',
+);
+assertEqual(
+    resetMessage({...previousQuota, ...previousFable, weekly: null}, currentQuota),
+    '5-hour and Fable weekly quotas reset',
+);
+assertEqual(
+    resetMessage({...previousQuota, ...previousFable, fiveHour: null}, currentQuota),
+    'Weekly and Fable weekly quotas reset',
+);

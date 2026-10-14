@@ -30,7 +30,12 @@ async function main() {
     const weekly = quotaWindow(
         limits?.seven_day ?? limits?.limits?.find((v) => v.kind === 'weekly_all'),
     );
-    if (!fiveHour && !weekly) return;
+    const fable = quotaWindow(
+        limits?.limits?.find(
+            (v) => v.kind === 'weekly_scoped' && v.scope?.model?.display_name === 'Fable',
+        ),
+    );
+    if (!fiveHour && !weekly && !fable) return;
 
     const directory = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
     const path = join(directory, 'cuotax-usage.json');
@@ -39,7 +44,21 @@ async function main() {
     try {
         await writeFile(
             temporary,
-            JSON.stringify({updatedAt: Date.now(), five_hour: fiveHour, seven_day: weekly}),
+            JSON.stringify({
+                updatedAt: Date.now(),
+                five_hour: fiveHour,
+                seven_day: weekly,
+                limits: fable
+                    ? [
+                          {
+                              kind: 'weekly_scoped',
+                              percent: fable.utilization,
+                              resets_at: fable.resets_at,
+                              scope: {model: {display_name: 'Fable'}},
+                          },
+                      ]
+                    : [],
+            }),
             {mode: 0o600, flag: 'wx'},
         );
         await rename(temporary, path);
@@ -47,7 +66,7 @@ async function main() {
         await unlink(temporary).catch(() => {});
     }
     process.stdout.write(
-        `Claude ${[fiveHour && `5h ${fiveHour.utilization}%`, weekly && `weekly ${weekly.utilization}%`].filter(Boolean).join(' · ')}\n`,
+        `Claude ${[fiveHour && `5h ${fiveHour.utilization}%`, weekly && `weekly ${weekly.utilization}%`, fable && `Fable weekly ${fable.utilization}%`].filter(Boolean).join(' · ')}\n`,
     );
 }
 

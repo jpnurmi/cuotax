@@ -247,6 +247,30 @@ private let claudeUsage = Data(
   #expect(model.error == nil)
 }
 
+@Test func readsFableQuota() throws {
+  let quota = try ClaudeClient.parseQuota(
+    Data(
+      """
+      {"five_hour":{"utilization":20},"seven_day":{"utilization":5},"limits":[{"kind":"weekly_scoped","percent":99,"scope":null},{"kind":"weekly_scoped","percent":80,"scope":{"model":{"display_name":"Sonnet"}}},{"kind":"weekly_scoped","percent":10,"resets_at":"2026-10-20T12:59:59.629512+00:00","scope":{"model":{"id":null,"display_name":"Fable"},"surface":null}}]}
+      """.utf8
+    ))
+  #expect(quota.weekly?.usedPercent == 5)
+  #expect(quota.fable?.usedPercent == 10)
+  #expect(quota.fable?.resetsAt != nil)
+
+  let only = try ClaudeClient.parseQuota(
+    Data(
+      """
+      {"limits":[{"kind":"weekly_scoped","percent":95,"scope":{"model":{"display_name":"Fable"}}}]}
+      """.utf8
+    ))
+  #expect(only.fiveHour == nil)
+  #expect(only.weekly == nil)
+  #expect(only.fable?.usedPercent == 95)
+  #expect(only.fable?.resetsAt == nil)
+  #expect(try ClaudeClient.parseQuota(claudeUsage).fable == nil)
+}
+
 private actor QuotaGate {
   private var continuation: CheckedContinuation<Void, Never>?
   private var released = false

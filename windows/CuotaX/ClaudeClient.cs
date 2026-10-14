@@ -122,6 +122,7 @@ internal sealed class ClaudeClient : IDisposable
         var root = document.RootElement;
         QuotaWindow? fiveHour = null;
         QuotaWindow? weekly = null;
+        QuotaWindow? fable = null;
         if (root.ValueKind == JsonValueKind.Object)
         {
             if (root.TryGetProperty("five_hour", out var five))
@@ -150,14 +151,25 @@ internal sealed class ClaudeClient : IDisposable
                     {
                         weekly ??= Window(limit);
                     }
+                    else if (kind.GetString() == "weekly_scoped"
+                        && limit.TryGetProperty("scope", out var scope)
+                        && scope.ValueKind == JsonValueKind.Object
+                        && scope.TryGetProperty("model", out var model)
+                        && model.ValueKind == JsonValueKind.Object
+                        && model.TryGetProperty("display_name", out var name)
+                        && name.ValueKind == JsonValueKind.String
+                        && name.GetString() == "Fable")
+                    {
+                        fable ??= Window(limit);
+                    }
                 }
             }
         }
-        if (fiveHour is null && weekly is null)
+        if (fiveHour is null && weekly is null && fable is null)
         {
             throw new BackendException("Claude returned no quota limits", "Subscription usage requires a Claude Code login with a Claude plan");
         }
-        return new Quota(fiveHour, weekly, updatedAt ?? DateTimeOffset.Now);
+        return new Quota(fiveHour, weekly, updatedAt ?? DateTimeOffset.Now, fable);
     }
 
     private async Task<Quota?> ReadCacheAsync(CancellationToken cancellationToken)

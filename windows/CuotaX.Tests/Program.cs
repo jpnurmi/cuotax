@@ -29,6 +29,7 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("Claude status-line fallback", TestClaudeHybrid),
     ("Claude request errors", TestClaudeErrors),
     ("Claude status-line watcher", TestClaudeWatcher),
+    ("Claude Fable usage", TestClaudeFable),
 };
 
 if (Environment.GetEnvironmentVariable("CODEX_TEST_LIVE") == "1")
@@ -509,6 +510,44 @@ static async Task TestClaudeWatcher()
     {
         Directory.Delete(directory, recursive: true);
     }
+}
+
+static Task TestClaudeFable()
+{
+    var quota = ClaudeClient.ParseQuota("""
+        {"five_hour":{"utilization":20},"seven_day":{"utilization":5},"limits":[{"kind":"weekly_scoped","percent":99,"scope":null},{"kind":"weekly_scoped","percent":80,"scope":{"model":{"display_name":"Sonnet"}}},{"kind":"weekly_scoped","percent":10,"resets_at":"2026-10-20T12:59:59.629512+00:00","scope":{"model":{"id":null,"display_name":"Fable"},"surface":null}}]}
+        """);
+    Equal(5d, quota.Weekly?.UsedPercent);
+    Equal(10d, quota.Fable?.UsedPercent);
+    True(quota.Fable?.ResetsAt is not null);
+    quota = ClaudeClient.ParseQuota("""
+        {"limits":[{"kind":"weekly_scoped","percent":95,"scope":{"model":{"display_name":"Fable"}}}]}
+        """);
+    Equal(null, quota.FiveHour);
+    Equal(null, quota.Weekly);
+    Equal(95d, quota.Fable?.UsedPercent);
+    Equal(null, quota.Fable?.ResetsAt);
+    Equal(null, ClaudeClient.ParseQuota("""{"seven_day":{"utilization":5}}""").Fable);
+
+    var now = DateTimeOffset.FromUnixTimeSeconds(1_777_000_000);
+    quota = new Quota(
+        new QuotaWindow(20, now.AddHours(2)),
+        new QuotaWindow(5, now.AddDays(6)),
+        now,
+        new QuotaWindow(95, now.AddDays(6))
+    );
+    Equal(95d, quota.HighestPercent);
+    Equal("Fable weekly", quota.Status(now).Window);
+    Equal(QuotaLevel.Critical, quota.Status(now).Level);
+    var reset = now.AddMinutes(1);
+    var previous = new Quota(null, null, now, new QuotaWindow(95, reset));
+    var current = new Quota(null, null, reset);
+    Equal<DateTimeOffset?>(reset, previous.NextReset(now));
+    Equal<DateTimeOffset?>(null, previous.NextReset(reset));
+    Equal("Fable weekly quota reset", Quota.ResetMessage(previous, current));
+    var all = previous with { FiveHour = previous.Fable, Weekly = previous.Fable };
+    Equal("5-hour, weekly and Fable weekly quotas reset", Quota.ResetMessage(all, current));
+    return Task.CompletedTask;
 }
 
 internal sealed class ClaudeHandler(HttpStatusCode status) : HttpMessageHandler

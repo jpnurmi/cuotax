@@ -195,6 +195,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     if let quota = model.quota {
       menu.addItem(quotaItem(label: "5-hour", quota: quota.fiveHour, fiveHour: true))
       menu.addItem(quotaItem(label: "Weekly", quota: quota.weekly, fiveHour: false))
+      if let fable = quota.fable {
+        menu.addItem(quotaItem(label: "Fable weekly", quota: fable, fiveHour: false))
+      }
       if let error = model.error {
         menu.addItem(infoItem("Refresh failed · showing previous data", color: .systemRed))
         menu.addItem(infoItem(error.diagnostic))

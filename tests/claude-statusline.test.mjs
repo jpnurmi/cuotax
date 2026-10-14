@@ -76,3 +76,73 @@ test('Claude usage accepts partial windows and invalid reset dates', () => {
     for (const value of [{}, {five_hour: {utilization: '42'}}, {limits: []}])
         assert.throws(() => parseClaudeQuota(value));
 });
+
+test('Fable usage remains separate from the overall weekly quota', async (t) => {
+    const reset = '2026-10-20T12:59:59.629512+00:00';
+    const limits = [
+        {kind: 'weekly_scoped', percent: 99, scope: null},
+        {kind: 'weekly_scoped', percent: 80, scope: {model: {display_name: 'Sonnet'}}},
+        {kind: 'session', percent: 20, resets_at: reset},
+        {kind: 'weekly_all', percent: 5, resets_at: reset},
+        {
+            kind: 'weekly_scoped',
+            percent: 10,
+            resets_at: reset,
+            scope: {model: {id: null, display_name: 'Fable'}, surface: null},
+            private: 'private session data',
+        },
+    ];
+    const direct = parseClaudeQuota({
+        five_hour: {utilization: 20},
+        seven_day: {utilization: 5},
+        limits,
+    });
+    assert.equal(direct.weekly.usedPercent, 5);
+    assert.equal(direct.fable.usedPercent, 10);
+    assert.equal(direct.fable.resetsAt, Date.parse(reset));
+
+    const {directory, result} = await run(t, {rate_limits: {limits}});
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'Claude 5h 20% · weekly 5% · Fable weekly 10%\n');
+    const contents = await readFile(join(directory, 'cuotax-usage.json'), 'utf8');
+    assert.equal(contents.includes('private session data'), false);
+    const cached = parseClaudeQuota(JSON.parse(contents));
+    assert.equal(cached.weekly.usedPercent, 5);
+    assert.deepEqual(cached.fable, direct.fable);
+});
+
+test('Fable-only usage is readable by CuotaX', async (t) => {
+    const {directory, result} = await run(t, {
+        rate_limits: {
+            limits: [
+                {
+                    kind: 'weekly_scoped',
+                    percent: 30,
+                    resets_at: null,
+                    scope: {model: {display_name: 'Fable'}},
+                },
+            ],
+        },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'Claude Fable weekly 30%\n');
+    const cached = parseClaudeQuota(
+        JSON.parse(await readFile(join(directory, 'cuotax-usage.json'), 'utf8')),
+    );
+    assert.equal(cached.fiveHour, null);
+    assert.equal(cached.weekly, null);
+    assert.equal(cached.fable.usedPercent, 30);
+    assert.equal(cached.fable.resetsAt, null);
+});
+
+test('unavailable Fable usage leaves the overall weekly quota intact', () => {
+    for (const limit of [
+        {kind: 'weekly_scoped', percent: 20},
+        {kind: 'weekly_scoped', percent: 20, scope: {model: null}},
+        {kind: 'weekly_scoped', percent: '20', scope: {model: {display_name: 'Fable'}}},
+    ]) {
+        const quota = parseClaudeQuota({seven_day: {utilization: 5}, limits: [limit]});
+        assert.equal(quota.weekly.usedPercent, 5);
+        assert.equal(quota.fable, null);
+    }
+});

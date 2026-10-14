@@ -14,13 +14,21 @@ struct Quota: Equatable, Sendable {
   let fiveHour: QuotaWindow?
   let weekly: QuotaWindow?
   let updatedAt: Date
+  let fable: QuotaWindow?
+
+  init(fiveHour: QuotaWindow?, weekly: QuotaWindow?, updatedAt: Date, fable: QuotaWindow? = nil) {
+    self.fiveHour = fiveHour
+    self.weekly = weekly
+    self.updatedAt = updatedAt
+    self.fable = fable
+  }
 
   var highestPercent: Double? {
-    [fiveHour, weekly].compactMap(\.self).map(\.usedPercent).max()
+    [fiveHour, weekly, fable].compactMap(\.self).map(\.usedPercent).max()
   }
 
   func nextReset(after now: Date = Date()) -> Date? {
-    [fiveHour?.resetsAt, weekly?.resetsAt]
+    [fiveHour?.resetsAt, weekly?.resetsAt, fable?.resetsAt]
       .compactMap(\.self)
       .filter { $0 > now }
       .min()
@@ -34,6 +42,14 @@ func resetMessage(previous: Quota?, current: Quota) -> String? {
     previous.fiveHour, previousUpdatedAt: previous.updatedAt, currentUpdatedAt: current.updatedAt)
   let weekly = crossedReset(
     previous.weekly, previousUpdatedAt: previous.updatedAt, currentUpdatedAt: current.updatedAt)
+  if crossedReset(
+    previous.fable, previousUpdatedAt: previous.updatedAt, currentUpdatedAt: current.updatedAt)
+  {
+    if fiveHour && weekly { return "5-hour, weekly and Fable weekly quotas reset" }
+    if fiveHour { return "5-hour and Fable weekly quotas reset" }
+    if weekly { return "Weekly and Fable weekly quotas reset" }
+    return "Fable weekly quota reset"
+  }
 
   return switch (fiveHour, weekly) {
   case (true, true): "5-hour and weekly quotas reset"
@@ -82,6 +98,8 @@ extension Quota {
         fiveHour, name: "5-hour", durationMinutes: fiveHourWindowDurationMinutes, now: now),
       windowStatus(
         weekly, name: "weekly", durationMinutes: weeklyWindowDurationMinutes, now: now),
+      windowStatus(
+        fable, name: "Fable weekly", durationMinutes: weeklyWindowDurationMinutes, now: now),
     ].compactMap(\.self)
 
     guard !statuses.isEmpty else {
