@@ -305,7 +305,7 @@ internal static class QuotaFormatting
         return $"{displayed.ToString(format, CultureInfo.CurrentCulture)}%";
     }
 
-    internal static string Time(DateTimeOffset? value) => value?.ToLocalTime().ToString("t", CultureInfo.CurrentCulture) ?? "—";
+    internal static string Time(DateTimeOffset? value) => value?.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture) ?? "—";
 
     internal static string Reset(
         DateTimeOffset? value,

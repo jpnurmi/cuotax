@@ -129,6 +129,10 @@ static Task TestQuotaFormatting()
         Equal("Tue 13:37", QuotaFormatting.Reset(reset, reset));
         Equal("13:37 (7h)", QuotaFormatting.Reset(reset, reset.AddHours(-7), includeDate: false));
         Equal("reset unknown", QuotaFormatting.Reset(null));
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        Equal("13:37", QuotaFormatting.Time(reset));
+        Equal("09:48", QuotaFormatting.Time(friday));
+        Equal("—", QuotaFormatting.Time(null));
     }
     finally
     {
