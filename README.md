@@ -12,10 +12,10 @@ when choosing the highest active quota percentage.
 
 Enable Codex, Claude, or both using the menu checkboxes. CuotaX remembers the
 enabled providers. GNOME and macOS combine them in one indicator with stacked
-percentages; Windows shows a separate indicator for each. Every menu groups the
-limits, update time, and errors beneath each provider's checkbox. Each provider
-refreshes independently and has its own quota, errors, and reset notifications.
-At least one provider stays enabled so its menu remains accessible.
+percentages; Windows shows a separate indicator for each. Each provider's checkbox
+shows its update time, with limits and errors beneath it. Each provider refreshes
+independently and has its own quota, errors, and reset notifications. At least one
+provider stays enabled so its menu remains accessible.
 
 Every five minutes and at known reset times, CuotaX reads Codex quota through
 `account/rateLimits/read` from the experimental Codex app-server interface using

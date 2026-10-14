@@ -245,8 +245,10 @@ const CuotaXIndicator = GObject.registerClass(
         updateMenu() {
             this.menu.removeAll();
             for (const provider of ['codex', 'claude']) {
+                const state = this._states().get(provider);
+                const title = provider === 'claude' ? 'Claude' : 'Codex';
                 const item = new PopupMenu.PopupMenuItem(
-                    provider === 'claude' ? 'Claude' : 'Codex',
+                    state?.quota ? `${title} (${formatTime(state.quota.updatedAt)})` : title,
                 );
                 const providers = this._selection();
                 item.setOrnament(
@@ -255,7 +257,6 @@ const CuotaXIndicator = GObject.registerClass(
                 item.setSensitive(!providers.has(provider) || providers.size > 1);
                 item.connect('activate', () => this._onToggle(provider));
                 this.menu.addMenuItem(item);
-                const state = this._states().get(provider);
                 if (state) this._addQuotaSection(provider, state);
                 this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
             }
@@ -275,7 +276,6 @@ const CuotaXIndicator = GObject.registerClass(
                     add(infoItem('Refresh failed · showing previous data', 'cuotax-error'));
                     add(infoItem(error.diagnostic, 'cuotax-diagnostic'));
                 }
-                add(infoItem(`Updated ${formatTime(quota.updatedAt)}`));
             } else if (error) {
                 add(infoItem(error.message, 'cuotax-error'));
                 add(infoItem(error.diagnostic, 'cuotax-diagnostic'));

@@ -352,14 +352,18 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         foreach (var provider in Enum.GetValues<Provider>())
         {
-            var item = new ToolStripMenuItem(provider.ToString())
+            _providers.TryGetValue(provider, out var state);
+            var title = state?.Quota is { } current
+                ? $"{provider} ({QuotaFormatting.Time(current.UpdatedAt)})"
+                : provider.ToString();
+            var item = new ToolStripMenuItem(title)
             {
                 Checked = _providers.ContainsKey(provider),
                 Enabled = !_providers.ContainsKey(provider) || _providers.Count > 1,
             };
             item.Click += (_, _) => ToggleProvider(provider);
             _menu.Items.Add(item);
-            if (!_providers.TryGetValue(provider, out var state))
+            if (state is null)
             {
                 _menu.Items.Add(new ToolStripSeparator());
                 continue;
@@ -377,7 +381,6 @@ internal sealed class TrayApplicationContext : ApplicationContext
                     AddInfo("Refresh failed · showing previous data");
                     AddInfo(error.Diagnostic);
                 }
-                AddInfo($"Updated {QuotaFormatting.Time(quota.UpdatedAt)}");
             }
             else if (state.Error is { } error)
             {

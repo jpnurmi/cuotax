@@ -174,12 +174,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     menu.removeAllItems()
 
     for provider in Provider.allCases {
-      let item = actionItem(provider.title, action: #selector(toggleProvider(_:)))
+      let model = models[provider]
+      let title =
+        model?.quota.map { "\(provider.title) (\(formatTime($0.updatedAt)))" } ?? provider.title
+      let item = actionItem(title, action: #selector(toggleProvider(_:)))
       item.representedObject = provider.rawValue
       item.state = providers.contains(provider) ? .on : .off
       item.isEnabled = !providers.contains(provider) || providers.count > 1
       menu.addItem(item)
-      if let model = models[provider] {
+      if let model {
         addQuotaSection(model)
       }
       menu.addItem(.separator())
@@ -202,7 +205,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(infoItem("Refresh failed · showing previous data", color: .systemRed))
         menu.addItem(infoItem(error.diagnostic))
       }
-      menu.addItem(infoItem("Updated \(formatTime(quota.updatedAt))"))
     } else if let error = model.error {
       menu.addItem(infoItem(error.message, color: .systemRed))
       menu.addItem(infoItem(error.diagnostic))
