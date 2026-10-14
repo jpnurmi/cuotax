@@ -282,7 +282,11 @@ func formatPercentages(_ quota: Quota) -> String {
 }
 
 func formatTime(_ value: Date?) -> String {
-  value?.formatted(date: .omitted, time: .shortened) ?? "—"
+  guard let value else { return "—" }
+  let formatter = DateFormatter()
+  formatter.locale = Locale(identifier: "en_US_POSIX")
+  formatter.dateFormat = "HH:mm"
+  return formatter.string(from: value)
 }
 
 func formatReset(_ value: Date?, now: Date = Date(), includeDate: Bool = true) -> String {

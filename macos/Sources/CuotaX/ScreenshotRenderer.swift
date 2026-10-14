@@ -6,13 +6,13 @@ import Foundation
 @MainActor
 enum ScreenshotRenderer {
   private static let width = 740
-  private static let height = 381
+  private static let height = 511
   private static let labelColor = NSColor(
     srgbRed: 0.92, green: 0.92, blue: 0.94, alpha: 1)
   private static let secondaryColor = NSColor(
     srgbRed: 0.66, green: 0.66, blue: 0.69, alpha: 1)
   private static let now = Date(timeIntervalSince1970: 1_787_919_780)
-  private static let quota = Quota(
+  private static let codex = Quota(
     fiveHour: QuotaWindow(
       usedPercent: 68,
       resetsAt: Date(timeIntervalSince1970: 1_787_928_780)
@@ -22,6 +22,21 @@ enum ScreenshotRenderer {
       resetsAt: Date(timeIntervalSince1970: 1_788_279_180)
     ),
     updatedAt: now
+  )
+  private static let claude = Quota(
+    fiveHour: QuotaWindow(
+      usedPercent: 26,
+      resetsAt: Date(timeIntervalSince1970: 1_787_928_780)
+    ),
+    weekly: QuotaWindow(
+      usedPercent: 6,
+      resetsAt: Date(timeIntervalSince1970: 1_788_279_180)
+    ),
+    updatedAt: now,
+    fable: QuotaWindow(
+      usedPercent: 12,
+      resetsAt: Date(timeIntervalSince1970: 1_788_279_180)
+    )
   )
 
   static func write(to path: String) throws {
@@ -73,13 +88,18 @@ enum ScreenshotRenderer {
     drawText("CuotaX", x: 22, y: 10, size: 13, color: .white, weight: .semibold)
     drawText("Fri 28 Aug  12:23", x: 592, y: 10, size: 13, color: .white)
 
-    let overall = quota.status(now: now)
+    let overall = codex.status(now: now)
     let color = statusColor(overall)
-    let icon = quotaImage(status: overall, color: color, updateAvailable: false)
-    icon.draw(in: topRect(x: 477, y: 9, width: 18, height: 18))
-    drawText(formatPercentages(quota), x: 501, y: 9, size: 14, color: color)
+    let icon = quotaImage(
+      status: overall, color: color, updateAvailable: false,
+      percentages: [
+        ("CX \(formatPercentages(codex))", color),
+        ("CC \(formatPercentages(claude))", statusColor(claude.status(now: now))),
+      ]
+    )
+    icon.draw(in: topRect(x: 477, y: 9, width: Int(icon.size.width), height: 18))
 
-    let menu = topRect(x: 174, y: 42, width: 544, height: 325)
+    let menu = topRect(x: 174, y: 42, width: 544, height: 455)
     let shadow = NSShadow()
     shadow.shadowBlurRadius = 18
     shadow.shadowOffset = NSSize(width: 0, height: -5)
@@ -89,20 +109,31 @@ enum ScreenshotRenderer {
     NSBezierPath(roundedRect: menu, xRadius: 13, yRadius: 13).fill()
     NSShadow().set()
 
-    drawWindow("5-hour", value: quota.fiveHour!, fiveHour: true, y: 74)
-    drawWindow("Weekly", value: quota.weekly!, fiveHour: false, y: 126)
-    separator(y: 177)
+    drawProvider("Codex", y: 64)
+    drawWindow("5-hour", value: codex.fiveHour!, fiveHour: true, y: 104)
+    drawWindow("Weekly", value: codex.weekly!, fiveHour: false, y: 146)
+    separator(y: 187)
+    drawProvider("Claude", y: 208)
+    drawWindow("5-hour", value: claude.fiveHour!, fiveHour: true, y: 250)
+    drawWindow("Weekly", value: claude.weekly!, fiveHour: false, y: 292)
+    drawWindow("Fable weekly", value: claude.fable!, fiveHour: false, y: 334)
+    separator(y: 376)
     drawText(
-      "Refresh (\(formatTime(quota.updatedAt)))",
+      "Refresh (\(formatTime(max(codex.updatedAt, claude.updatedAt))))",
       x: 207,
-      y: 198,
+      y: 397,
       size: 15,
       color: labelColor
     )
-    drawText("⌘R", x: 668, y: 198, size: 15, color: secondaryColor)
-    separator(y: 237)
-    drawText("Quit CuotaX", x: 207, y: 258, size: 15, color: labelColor)
-    drawText("⌘Q", x: 668, y: 258, size: 15, color: secondaryColor)
+    drawText("⌘R", x: 668, y: 397, size: 15, color: secondaryColor)
+    separator(y: 437)
+    drawText("Quit CuotaX", x: 207, y: 458, size: 15, color: labelColor)
+    drawText("⌘Q", x: 668, y: 458, size: 15, color: secondaryColor)
+  }
+
+  private static func drawProvider(_ label: String, y: Int) {
+    drawText("✓", x: 185, y: y, size: 15, color: labelColor)
+    drawText(label, x: 207, y: y, size: 15, color: labelColor)
   }
 
   private static func drawWindow(
@@ -118,11 +149,11 @@ enum ScreenshotRenderer {
     ).status(now: now)
     let color = statusColor(status)
     color.setFill()
-    NSBezierPath(ovalIn: topRect(x: 207, y: y + 5, width: 8, height: 8)).fill()
+    NSBezierPath(ovalIn: topRect(x: 228, y: y + 5, width: 8, height: 8)).fill()
     let comparison = normalizedPercent(value.usedPercent) <= status.onTrackPercent! ? "≤" : ">"
     let title =
       "\(label)  \(formatPercent(value.usedPercent)) (\(comparison)\(formatPercent(status.onTrackPercent))) · \(formatReset(value.resetsAt, now: now, includeDate: !fiveHour))"
-    drawText(title, x: 228, y: y, size: 15, color: labelColor)
+    drawText(title, x: 249, y: y, size: 15, color: labelColor)
   }
 
   private static func separator(y: Int) {

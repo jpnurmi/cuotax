@@ -41,6 +41,9 @@ import Testing
       == "13:37 (7h)"
   )
   #expect(formatReset(nil) == "reset unknown")
+  #expect(formatTime(date) == "13:37")
+  #expect(formatTime(friday) == "09:48")
+  #expect(formatTime(nil) == "—")
 }
 
 @Test func resetNotification() {
