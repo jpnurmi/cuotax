@@ -14,7 +14,7 @@ internal static class TrayIconRenderer
     private static readonly Color Unavailable = Color.FromArgb(82, 82, 91);
     private static readonly Color Loading = Color.FromArgb(113, 113, 122);
 
-    internal static TrayIconVisual ForQuota(Quota quota, DateTimeOffset? now = null)
+    internal static TrayIconVisual ForQuota(Quota quota, DateTimeOffset? now = null, bool weeklyOnly = false)
     {
         var highest = quota.HighestPercent ?? 0;
         if (highest >= 100)
@@ -25,13 +25,18 @@ internal static class TrayIconRenderer
         var status = quota.Status(now);
         var pace = QuotaFormatting.Color(status) ?? new PaceColor(113, 113, 122);
         var background = Color.FromArgb(pace.Red, pace.Green, pace.Blue);
-        var label = Math.Min(
+        var percent = weeklyOnly ? quota.Weekly?.UsedPercent : highest;
+        var label = percent is null ? "-" : Math.Min(
             99,
             (int)Math.Round(
-                QuotaFormatting.DisplayPercent(highest),
+                QuotaFormatting.DisplayPercent(percent.Value),
                 MidpointRounding.AwayFromZero
             )
         ).ToString();
+        if (weeklyOnly && percent is not null)
+        {
+            label += "%";
+        }
         return new TrayIconVisual(label, background, Foreground(background));
     }
 
@@ -40,8 +45,11 @@ internal static class TrayIconRenderer
     internal static TrayIconVisual LoadingState() => new("…", Loading, Color.White);
 
     internal static Icon Create(TrayIconVisual visual, bool updateAvailable = false)
+        => Create([visual], updateAvailable);
+
+    internal static Icon Create(IReadOnlyList<TrayIconVisual> visuals, bool updateAvailable = false)
     {
-        using var bitmap = Render(visual, 32, updateAvailable);
+        using var bitmap = Render(visuals, SystemInformation.SmallIconSize.Width, updateAvailable);
         var handle = bitmap.GetHicon();
         try
         {
@@ -55,36 +63,73 @@ internal static class TrayIconRenderer
     }
 
     internal static Bitmap Render(TrayIconVisual visual, int size, bool updateAvailable = false)
+        => Render([visual], size, updateAvailable);
+
+    internal static Bitmap Render(IReadOnlyList<TrayIconVisual> visuals, int size, bool updateAvailable = false)
     {
+        if (visuals.Count is < 1 or > 2)
+        {
+            throw new ArgumentException("A tray icon needs one or two rows", nameof(visuals));
+        }
         var bitmap = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         using var graphics = Graphics.FromImage(bitmap);
         graphics.Clear(Color.Transparent);
+
+        var stacked = visuals.Count > 1;
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
-
         var inset = Math.Max(1, size / 16f);
-        var bounds = new RectangleF(inset, inset, size - 2 * inset, size - 2 * inset);
-        using var path = RoundedRectangle(bounds, size * 0.22f);
-        using var brush = new SolidBrush(visual.Background);
-        graphics.FillPath(brush, path);
-
-        using var border = new Pen(Color.FromArgb(55, Color.Black), Math.Max(1, size / 24f));
-        graphics.DrawPath(border, path);
-
-        var fontSize = visual.Label.Length > 1 ? size * 0.49f : size * 0.58f;
-        using var font = new Font("Segoe UI", fontSize, FontStyle.Bold, GraphicsUnit.Pixel);
-        using var textBrush = new SolidBrush(visual.Foreground);
-        using var format = new StringFormat
+        var bounds = stacked
+            ? new RectangleF(0, 0, size, size)
+            : new RectangleF(inset, inset, size - 2 * inset, size - 2 * inset);
+        if (!stacked)
         {
-            Alignment = StringAlignment.Center,
-            LineAlignment = StringAlignment.Center,
-            FormatFlags = StringFormatFlags.NoWrap,
-        };
-        graphics.DrawString(visual.Label, font, textBrush, bounds, format);
+            using var path = RoundedRectangle(bounds, size * 0.22f);
+            using var brush = new SolidBrush(visuals[0].Background);
+            graphics.FillPath(brush, path);
+            using var border = new Pen(Color.FromArgb(55, Color.Black), Math.Max(1, size / 24f));
+            graphics.DrawPath(border, path);
+        }
+        graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        for (var row = 0; row < visuals.Count; row++)
+        {
+            var visual = visuals[row];
+            var rowBounds = stacked
+                ? new RectangleF(bounds.X, bounds.Y + row * bounds.Height / 2, bounds.Width, bounds.Height / 2)
+                : bounds;
+            if (stacked)
+            {
+                using var glyph = new GraphicsPath();
+                using var family = new FontFamily("Segoe UI");
+                glyph.AddString(visual.Label, family, (int)FontStyle.Regular, size, PointF.Empty, StringFormat.GenericTypographic);
+                var glyphBounds = glyph.GetBounds();
+                using var reference = new Font(family, size, FontStyle.Regular, GraphicsUnit.Pixel);
+                var width = graphics.MeasureString(visual.Label, reference, 1000, StringFormat.GenericTypographic).Width;
+                var scale = Math.Min(rowBounds.Width / width, (rowBounds.Height - size / 32f) / glyphBounds.Height);
+                var origin = new PointF(
+                    rowBounds.X + (rowBounds.Width - glyphBounds.Width * scale) / 2 - glyphBounds.X * scale,
+                    rowBounds.Y + (rowBounds.Height - glyphBounds.Height * scale) / 2 - glyphBounds.Y * scale
+                );
+                using var text = new Font(family, size * scale, FontStyle.Regular, GraphicsUnit.Pixel);
+                using var brush = new SolidBrush(visual.Background);
+                graphics.DrawString(visual.Label, text, brush, origin, StringFormat.GenericTypographic);
+                continue;
+            }
+
+            var fontSize = visual.Label.Length > 1 ? size * 0.49f : size * 0.58f;
+            using var font = new Font("Segoe UI", fontSize, FontStyle.Bold, GraphicsUnit.Pixel);
+            using var textBrush = new SolidBrush(visual.Foreground);
+            using var format = new StringFormat
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Center,
+                FormatFlags = StringFormatFlags.NoWrap,
+            };
+            graphics.DrawString(visual.Label, font, textBrush, rowBounds, format);
+        }
 
         if (updateAvailable)
         {
-            var badgeSize = size * 5f / 16;
+            var badgeSize = size * (stacked ? 3f : 5f) / 16;
             var badgeBounds = new RectangleF(0, size - badgeSize, badgeSize, badgeSize);
             using var badge = new SolidBrush(Color.FromArgb(22, 136, 248));
             graphics.FillEllipse(badge, badgeBounds);

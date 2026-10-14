@@ -14,11 +14,14 @@ enabled providers. GNOME and macOS combine them in one indicator with stacked
 `CX` (Codex) and `CC` (Claude) rows, replacing the icon when both are enabled.
 Codex keeps two slots; Claude adds Fable weekly when available. Missing limits
 use `-`, such as `CX 26/-%`.
-Each prefix and its percentages share the provider's quota color. Windows shows
-a separate indicator for each. Each provider shows its limits and errors beneath
-its checkbox. The Refresh menu item shows the latest update time. Each provider
-refreshes independently and has its own quota, errors, and reset notifications.
-At least one provider stays enabled so its menu remains accessible.
+Each prefix and its percentages share the provider's quota color. Windows uses
+one tray icon, with Codex's weekly percentage above Claude's when both are enabled.
+The two rows are plain text in each provider's quota color on a transparent
+background, and missing weekly limits use `-`.
+Each provider shows its limits and errors beneath its checkbox. The Refresh
+menu item shows the latest update time. Each provider refreshes independently
+and has its own quota, errors, and reset notifications. At least one provider
+stays enabled so its menu remains accessible.
 
 Every five minutes and at known reset times, CuotaX reads Codex quota through
 `account/rateLimits/read` from the experimental Codex app-server interface using
@@ -90,10 +93,11 @@ bridge and your existing command.
 - macOS: The app has no Dock icon and registers itself as a login item when it
   launches.
 - Windows: The app registers itself to start with Windows when it launches. The
-  app shows one tray icon per enabled provider, identified by its tooltip. Each
-  icon shows that provider's highest active quota as a two-digit overlay. Exhausted
-  quota is shown as a deep-red `×`, while backend or authentication failures use
-  a distinct `!` icon.
+  tray icon shows the highest active quota with one provider enabled, or two
+  stacked weekly percentages (with `%`) with both enabled. The tooltip identifies each
+  provider and shows its usage. Numbers are capped at `99`; any exhausted quota
+  replaces that provider's number with a deep-red `×`. Backend or authentication
+  failures without previous data use `!`.
 
 The protocol and rate-limit fields are documented in the
 [Codex App Server documentation](https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt).

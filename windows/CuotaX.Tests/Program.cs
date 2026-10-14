@@ -35,6 +35,7 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("Claude login renewal", TestClaudeRenewal),
     ("Claude login recovery", TestClaudeRecovery),
     ("Claude login concurrency", TestClaudeConcurrentRenewal),
+    ("stacked tray icon", TestStackedTrayIcon),
 };
 
 if (Environment.GetEnvironmentVariable("CODEX_TEST_LIVE") == "1")
@@ -253,6 +254,53 @@ static Task TestTrayIconStates()
     return Task.CompletedTask;
 }
 
+static Task TestStackedTrayIcon()
+{
+    var now = DateTimeOffset.FromUnixTimeSeconds(1_777_000_000);
+    var quota = new Quota(
+        new QuotaWindow(82, now.AddHours(4)),
+        new QuotaWindow(7, now.AddDays(5)),
+        now,
+        new QuotaWindow(95, now.AddDays(6))
+    );
+    var weekly = TrayIconRenderer.ForQuota(quota, now, weeklyOnly: true);
+    Equal("7%", weekly.Label);
+    Equal(TrayIconRenderer.ForQuota(quota, now).Background, weekly.Background);
+    Equal("-", TrayIconRenderer.ForQuota(quota with { Weekly = null }, now, weeklyOnly: true).Label);
+    var exhausted = TrayIconRenderer.ForQuota(
+        quota with { FiveHour = new QuotaWindow(100, now.AddHours(4)) },
+        now,
+        weeklyOnly: true
+    );
+    Equal("×", exhausted.Label);
+
+    var rows = new[] { weekly, TrayIconRenderer.ForQuota(quota with { Weekly = new QuotaWindow(99, now.AddDays(5)) }, now, weeklyOnly: true) };
+    foreach (var size in new[] { 16, 20, 24, 32 })
+    {
+        using var image = TrayIconRenderer.Render(rows, size);
+        for (var row = 0; row < rows.Length; row++)
+        {
+            var pixels = Enumerable.Range(row * size / 2, size / 2)
+                .SelectMany(y => Enumerable.Range(0, size).Select(x => image.GetPixel(x, y)))
+                .ToArray();
+            True(pixels.Count(pixel => pixel.A == 0) > pixels.Length / 4);
+            True(pixels.Any(pixel => pixel.A is > 0 and < 255));
+            var color = rows[row].Background;
+            True(pixels.Any(pixel => pixel.A > 0
+                && Math.Abs(pixel.R - color.R) <= 4
+                && Math.Abs(pixel.G - color.G) <= 4
+                && Math.Abs(pixel.B - color.B) <= 4));
+        }
+        using var update = TrayIconRenderer.Render(rows, size, updateAvailable: true);
+        var badge = update.GetPixel(size / 8, size * 7 / 8);
+        True(badge.B > badge.R && badge.B > badge.G);
+    }
+    using var icon = TrayIconRenderer.Create(rows);
+    True(icon.Handle != nint.Zero);
+
+    return Task.CompletedTask;
+}
+
 static Task TestUpdateComparison()
 {
     True(UpdateChecker.HasUpdate("{\"ahead_by\":2}"));
@@ -352,7 +400,7 @@ static async Task RunFixture(string fixture)
 static void SavePreview(string path)
 {
     var now = DateTimeOffset.Now;
-    var visuals = new[]
+    var singles = new[]
     {
         TrayIconRenderer.ForQuota(new Quota(new QuotaWindow(7, now.AddHours(4)), null, now)),
         TrayIconRenderer.ForQuota(new Quota(new QuotaWindow(42, now.AddHours(4)), null, now)),
@@ -360,8 +408,25 @@ static void SavePreview(string path)
         TrayIconRenderer.ForQuota(new Quota(new QuotaWindow(100, now.AddHours(4)), null, now)),
         TrayIconRenderer.Error(),
     };
+    TrayIconVisual Weekly(double percent) => TrayIconRenderer.ForQuota(
+        new Quota(null, new QuotaWindow(percent, now.AddDays(5)), now), now, weeklyOnly: true
+    );
+    var visuals = new TrayIconVisual[][]
+    {
+        [singles[0]],
+        [singles[1]],
+        [singles[2]],
+        [singles[3]],
+        [singles[4]],
+        [Weekly(8), Weekly(7)],
+        [Weekly(7), Weekly(42)],
+        [Weekly(42), Weekly(82)],
+        [Weekly(99), Weekly(100)],
+        [Weekly(7), TrayIconRenderer.Error()],
+        [TrayIconRenderer.LoadingState(), Weekly(42)],
+    };
     const int cellSize = 192;
-    var sizes = new[] { 16, 32 };
+    var sizes = new[] { 16, 20, 24, 32 };
     using var preview = new Bitmap(visuals.Length * cellSize, sizes.Length * cellSize);
     using var graphics = Graphics.FromImage(preview);
     graphics.Clear(Color.FromArgb(32, 32, 32));
@@ -380,6 +445,20 @@ static void SavePreview(string path)
 
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
     preview.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+
+    using var native = new Bitmap((visuals.Length - singles.Length) * 40, 80);
+    using var nativeGraphics = Graphics.FromImage(native);
+    for (var row = 0; row < 2; row++)
+    {
+        using var background = new SolidBrush(row == 0 ? Color.FromArgb(32, 32, 32) : Color.FromArgb(240, 240, 240));
+        nativeGraphics.FillRectangle(background, 0, row * 40, native.Width, 40);
+        for (var index = singles.Length; index < visuals.Length; index++)
+        {
+            using var icon = TrayIconRenderer.Render(visuals[index], 20);
+            nativeGraphics.DrawImageUnscaled(icon, (index - singles.Length) * 40 + 10, row * 40 + 10);
+        }
+    }
+    native.Save(Path.ChangeExtension(path, ".native.png"), System.Drawing.Imaging.ImageFormat.Png);
 }
 
 static void Equal<T>(T expected, T actual)

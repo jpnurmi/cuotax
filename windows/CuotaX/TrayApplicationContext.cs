@@ -16,6 +16,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly ClaudeClient _claudeClient = new();
     private readonly UpdateChecker _updateChecker = new();
     private readonly ContextMenuStrip _menu = new();
+    private readonly NotifyIcon _notifyIcon = new();
     private readonly Form _menuOwner = new()
     {
         FormBorderStyle = FormBorderStyle.None,
@@ -30,6 +31,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly CancellationTokenSource _cancellation = new();
     private readonly SynchronizationContext _uiContext;
     private BackendException? _startupError;
+    private Icon? _icon;
     private bool _started;
     private bool _updateAvailable;
     private bool _disposed;
@@ -39,6 +41,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
         _menu.Opening += MenuOpening;
         _menu.Closed += MenuClosed;
+        _notifyIcon.ContextMenuStrip = _menu;
+        _notifyIcon.MouseClick += NotifyIconMouseClick;
         foreach (var provider in LoadProviders())
         {
             AddProvider(provider);
@@ -95,6 +99,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 state.Dispose();
             }
             _providers.Clear();
+            _notifyIcon.Visible = false;
+            _notifyIcon.Dispose();
+            _icon?.Dispose();
             _menu.Dispose();
             _menuOwner.Dispose();
             _cancellation.Dispose();
@@ -222,7 +229,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             ScheduleResetRefresh(state, quota);
             if (reset is not null)
             {
-                state.NotifyIcon.ShowBalloonTip(5000, $"{provider} quota reset", reset, ToolTipIcon.Info);
+                _notifyIcon.ShowBalloonTip(5000, $"{provider} quota reset", reset, ToolTipIcon.Info);
             }
         }
         catch (BackendException error)
@@ -248,7 +255,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             state.Refreshing = false;
             if (IsActive(state))
             {
-                Render(state);
+                Render();
                 if (state.Queued)
                 {
                     state.Queued = false;
@@ -298,47 +305,49 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private void Render(ProviderState? changed = null)
+    private void Render()
     {
-        foreach (var state in _providers.Values)
+        var stacked = _providers.Count > 1;
+        var visuals = Enum.GetValues<Provider>().Where(_providers.ContainsKey).Select(provider =>
         {
-            if (changed is not null && state != changed)
-            {
-                continue;
-            }
-            var visual = state.Quota is not null
-                ? TrayIconRenderer.ForQuota(state.Quota)
+            var state = _providers[provider];
+            return state.Quota is not null
+                ? TrayIconRenderer.ForQuota(state.Quota, weeklyOnly: stacked)
                 : state.Error is not null || _startupError is not null
                     ? TrayIconRenderer.Error()
                     : TrayIconRenderer.LoadingState();
-            var icon = TrayIconRenderer.Create(visual, _updateAvailable);
-            var previous = state.Icon;
-            state.Icon = icon;
-            state.NotifyIcon.Icon = icon;
-            state.NotifyIcon.Text = Tooltip(state);
-            state.NotifyIcon.Visible = true;
-            previous?.Dispose();
-        }
+        }).ToArray();
+        var icon = TrayIconRenderer.Create(visuals, _updateAvailable);
+        var previous = _icon;
+        _icon = icon;
+        _notifyIcon.Icon = icon;
+        _notifyIcon.Text = Tooltip();
+        _notifyIcon.Visible = true;
+        previous?.Dispose();
         if (!_menu.Visible)
         {
             RenderMenu();
         }
     }
 
-    private string Tooltip(ProviderState state)
+    private string Tooltip()
     {
-        if (state.Quota is { } quota)
+        var labels = Enum.GetValues<Provider>().Where(_providers.ContainsKey).Select(provider =>
         {
-            var percent = QuotaFormatting.Percent(quota.HighestPercent);
-            var update = _updateAvailable ? ", update available" : string.Empty;
-            return Shorten(
-                $"CuotaX — {state.Provider} {percent} used, {quota.Status().PaceLabel.ToLowerInvariant()}{update}"
-            );
-        }
-
-        var error = state.Error ?? _startupError;
-        var label = error is null ? $"CuotaX — {state.Provider} loading" : $"CuotaX {state.Provider} unavailable — {error.Message}";
-        return Shorten(label + (_updateAvailable ? ", update available" : string.Empty));
+            var state = _providers[provider];
+            if (state.Quota is { } quota)
+            {
+                var fable = quota.Fable is { } window
+                    ? $", Fable {QuotaFormatting.Percent(window.UsedPercent)}"
+                    : string.Empty;
+                return $"{provider}: weekly {QuotaFormatting.Percent(quota.Weekly?.UsedPercent)}, 5h {QuotaFormatting.Percent(quota.FiveHour?.UsedPercent)}{fable}";
+            }
+            return state.Error is not null || _startupError is not null
+                ? $"{provider} unavailable"
+                : $"{provider} loading";
+        });
+        return Shorten("CuotaX\n" + string.Join('\n', labels)
+            + (_updateAvailable ? "\nUpdate available" : string.Empty));
     }
 
     private void RenderMenu()
@@ -439,8 +448,6 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private void AddProvider(Provider provider)
     {
         var state = new ProviderState(provider);
-        state.NotifyIcon.ContextMenuStrip = _menu;
-        state.NotifyIcon.MouseClick += NotifyIconMouseClick;
         state.ResetTimer.Tick += (_, _) =>
         {
             state.ResetTimer.Stop();
@@ -509,10 +516,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private sealed class ProviderState(Provider provider) : IDisposable
     {
         internal Provider Provider { get; } = provider;
-        internal NotifyIcon NotifyIcon { get; } = new();
         internal System.Windows.Forms.Timer ResetTimer { get; } = new();
         internal CancellationTokenSource Cancellation { get; } = new();
-        internal Icon? Icon { get; set; }
         internal Quota? Quota { get; set; }
         internal BackendException? Error { get; set; }
         internal bool Refreshing { get; set; }
@@ -522,9 +527,6 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             Cancellation.Cancel();
             ResetTimer.Dispose();
-            NotifyIcon.Visible = false;
-            NotifyIcon.Dispose();
-            Icon?.Dispose();
             Cancellation.Dispose();
         }
     }
