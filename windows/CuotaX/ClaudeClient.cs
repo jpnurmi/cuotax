@@ -169,8 +169,15 @@ internal sealed class ClaudeClient : IDisposable
                 return null;
             }
             var updatedAt = DateTimeOffset.FromUnixTimeMilliseconds(milliseconds);
-            var age = DateTimeOffset.Now - updatedAt;
-            return age >= TimeSpan.Zero && age < TimeSpan.FromMinutes(5) ? ParseQuota(data, updatedAt) : null;
+            var now = DateTimeOffset.Now;
+            var age = now - updatedAt;
+            if (age < TimeSpan.Zero || age >= TimeSpan.FromMinutes(5))
+            {
+                return null;
+            }
+            var quota = ParseQuota(data, updatedAt);
+            return new[] { quota.FiveHour?.ResetsAt, quota.Weekly?.ResetsAt, quota.Fable?.ResetsAt }
+                .Any(reset => reset <= now) ? null : quota;
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {

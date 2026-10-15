@@ -569,11 +569,19 @@ static async Task TestClaudeHybrid()
         Equal(98d, quota.FiveHour?.UsedPercent);
         Equal(updatedAt, quota.UpdatedAt.ToUnixTimeMilliseconds());
         Equal(0, handler.Requests);
+        var future = DateTimeOffset.Now.AddMinutes(1).ToString("O", CultureInfo.InvariantCulture);
+        await File.WriteAllTextAsync(cache, $"{{\"updatedAt\":{updatedAt},\"five_hour\":{{\"utilization\":98,\"resets_at\":\"{future}\"}},\"seven_day\":{{\"utilization\":7,\"resets_at\":\"{future}\"}},\"limits\":[{{\"kind\":\"weekly_scoped\",\"percent\":10,\"resets_at\":\"{future}\",\"scope\":{{\"model\":{{\"display_name\":\"Fable\"}}}}}}]}}");
+        Equal(98d, (await client.ReadQuotaAsync()).FiveHour?.UsedPercent);
+        Equal(0, handler.Requests);
+        var reset = DateTimeOffset.Now.ToString("O", CultureInfo.InvariantCulture);
         foreach (var data in new[] {
             "invalid",
             $"{{\"updatedAt\":{DateTimeOffset.Now.AddMinutes(-6).ToUnixTimeMilliseconds()},\"five_hour\":{{\"utilization\":98}}}}",
             $"{{\"updatedAt\":{DateTimeOffset.Now.AddMinutes(1).ToUnixTimeMilliseconds()},\"five_hour\":{{\"utilization\":98}}}}",
             $"{{\"updatedAt\":{DateTimeOffset.Now.ToUnixTimeMilliseconds()}}}",
+            $"{{\"updatedAt\":{updatedAt},\"five_hour\":{{\"utilization\":98,\"resets_at\":\"{reset}\"}}}}",
+            $"{{\"updatedAt\":{updatedAt},\"five_hour\":{{\"utilization\":98}},\"seven_day\":{{\"utilization\":7,\"resets_at\":\"{reset}\"}}}}",
+            $"{{\"updatedAt\":{updatedAt},\"five_hour\":{{\"utilization\":98}},\"limits\":[{{\"kind\":\"weekly_scoped\",\"percent\":10,\"resets_at\":\"{reset}\",\"scope\":{{\"model\":{{\"display_name\":\"Fable\"}}}}}}]}}",
         })
         {
             await File.WriteAllTextAsync(cache, data);
@@ -581,7 +589,7 @@ static async Task TestClaudeHybrid()
         }
         File.Delete(cache);
         Equal(42d, (await client.ReadQuotaAsync()).FiveHour?.UsedPercent);
-        Equal(5, handler.Requests);
+        Equal(8, handler.Requests);
     }
     finally
     {

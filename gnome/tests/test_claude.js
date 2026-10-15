@@ -110,6 +110,26 @@ async function run() {
         await fileBackend.refresh();
         assertEqual(quota.fiveHour.usedPercent, 98);
         assertEqual(error, null);
+        const future = new Date(Date.now() + 60 * 1000).toISOString();
+        GLib.file_set_contents(
+            cachePath,
+            JSON.stringify({
+                updatedAt: Date.now(),
+                five_hour: {utilization: 98, resets_at: future},
+                seven_day: {utilization: 7, resets_at: future},
+                limits: [
+                    {
+                        kind: 'weekly_scoped',
+                        percent: 10,
+                        resets_at: future,
+                        scope: {model: {display_name: 'Fable'}},
+                    },
+                ],
+            }),
+        );
+        await fileBackend.refresh();
+        assertEqual(quota.fiveHour.usedPercent, 98);
+        assertEqual(error, null);
         GLib.file_set_contents(
             cachePath,
             JSON.stringify({updatedAt: 1, five_hour: {utilization: 98}}),
@@ -117,6 +137,30 @@ async function run() {
         GLib.file_set_contents(credentialsPath, '{"claudeAiOauth":{"accessToken":"fixture"}}');
         await fileBackend.refresh();
         assertEqual(error, httpError);
+        const reset = new Date().toISOString();
+        for (const usage of [
+            {five_hour: {utilization: 98, resets_at: reset}},
+            {
+                five_hour: {utilization: 98},
+                seven_day: {utilization: 7, resets_at: reset},
+            },
+            {
+                five_hour: {utilization: 98},
+                limits: [
+                    {
+                        kind: 'weekly_scoped',
+                        percent: 10,
+                        resets_at: reset,
+                        scope: {model: {display_name: 'Fable'}},
+                    },
+                ],
+            },
+        ]) {
+            error = null;
+            GLib.file_set_contents(cachePath, JSON.stringify({updatedAt: Date.now(), ...usage}));
+            await fileBackend.refresh();
+            assertEqual(error, httpError);
+        }
     } finally {
         fileBackend.destroy();
         Gio.File.new_for_path(cachePath).delete(null);

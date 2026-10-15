@@ -33,9 +33,12 @@ struct ClaudeClient: Sendable {
       cache.updatedAt.isFinite
     {
       let updatedAt = Date(timeIntervalSince1970: cache.updatedAt / 1000)
-      let age = Date().timeIntervalSince(updatedAt)
+      let now = Date()
+      let age = now.timeIntervalSince(updatedAt)
       if age >= 0, age < 5 * 60,
-        let quota = try? Self.parseQuota(data, updatedAt: updatedAt)
+        let quota = try? Self.parseQuota(data, updatedAt: updatedAt),
+        [quota.fiveHour?.resetsAt, quota.weekly?.resetsAt, quota.fable?.resetsAt]
+          .compactMap(\.self).allSatisfy({ $0 > now })
       {
         return quota
       }

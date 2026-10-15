@@ -70,17 +70,22 @@ private let claudeUsage = Data(
   defer { try? FileManager.default.removeItem(at: directory) }
   let url = directory.appendingPathComponent("cuotax-usage.json")
   let updatedAt = Date().addingTimeInterval(-60)
-  let data = Data(
-    "{\"updatedAt\":\(updatedAt.timeIntervalSince1970 * 1000),\"five_hour\":{\"utilization\":98}}"
-      .utf8)
-  try data.write(to: url, options: .atomic)
+  let future = ISO8601DateFormatter().string(from: Date().addingTimeInterval(60))
   let client = ClaudeClient(
     token: { throw BackendError(message: "Unexpected login read", diagnostic: "") },
     cacheURL: url
   )
-  let quota = try await client.readQuota()
-  #expect(quota.fiveHour?.usedPercent == 98)
-  #expect(abs(quota.updatedAt.timeIntervalSince(updatedAt)) < 0.001)
+  for data in [
+    "{\"updatedAt\":\(updatedAt.timeIntervalSince1970 * 1000),\"five_hour\":{\"utilization\":98}}",
+    """
+    {"updatedAt":\(updatedAt.timeIntervalSince1970 * 1000),"five_hour":{"utilization":98,"resets_at":"\(future)"},"seven_day":{"utilization":7,"resets_at":"\(future)"},"limits":[{"kind":"weekly_scoped","percent":10,"resets_at":"\(future)","scope":{"model":{"display_name":"Fable"}}}]}
+    """,
+  ] {
+    try Data(data.utf8).write(to: url, options: .atomic)
+    let quota = try await client.readQuota()
+    #expect(quota.fiveHour?.usedPercent == 98)
+    #expect(abs(quota.updatedAt.timeIntervalSince(updatedAt)) < 0.001)
+  }
 }
 
 @Test func pollsWhenClaudeStatusLineIsUnavailable() async throws {
@@ -99,11 +104,18 @@ private let claudeUsage = Data(
     cacheURL: url
   )
   #expect(try await client.readQuota().fiveHour?.usedPercent == 42)
+  let updatedAt = Date().timeIntervalSince1970 * 1000
+  let reset = ISO8601DateFormatter().string(from: Date())
   for data in [
     "invalid",
     "{\"updatedAt\":\(Date().addingTimeInterval(-301).timeIntervalSince1970 * 1000),\"five_hour\":{\"utilization\":98}}",
     "{\"updatedAt\":\(Date().addingTimeInterval(60).timeIntervalSince1970 * 1000),\"five_hour\":{\"utilization\":98}}",
     "{\"updatedAt\":\(Date().timeIntervalSince1970 * 1000)}",
+    "{\"updatedAt\":\(updatedAt),\"five_hour\":{\"utilization\":98,\"resets_at\":\"\(reset)\"}}",
+    "{\"updatedAt\":\(updatedAt),\"five_hour\":{\"utilization\":98},\"seven_day\":{\"utilization\":7,\"resets_at\":\"\(reset)\"}}",
+    """
+    {"updatedAt":\(updatedAt),"five_hour":{"utilization":98},"limits":[{"kind":"weekly_scoped","percent":10,"resets_at":"\(reset)","scope":{"model":{"display_name":"Fable"}}}]}
+    """,
   ] {
     try Data(data.utf8).write(to: url, options: .atomic)
     #expect(try await client.readQuota().fiveHour?.usedPercent == 42)

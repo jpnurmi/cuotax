@@ -213,9 +213,17 @@ async function cachedQuota(cancellable) {
     try {
         const [contents] = await file.load_contents_async(cancellable);
         const usage = JSON.parse(new TextDecoder().decode(contents));
-        const age = Date.now() - usage.updatedAt;
+        const now = Date.now();
+        const age = now - usage.updatedAt;
         if (!Number.isFinite(usage.updatedAt) || age < 0 || age >= 5 * 60 * 1000) return null;
-        return parseClaudeQuota(usage, usage.updatedAt);
+        const quota = parseClaudeQuota(usage, usage.updatedAt);
+        if (
+            [quota.fiveHour, quota.weekly, quota.fable].some(
+                (window) => Number.isFinite(window?.resetsAt) && window.resetsAt <= now,
+            )
+        )
+            return null;
+        return quota;
     } catch {
         return null;
     }
