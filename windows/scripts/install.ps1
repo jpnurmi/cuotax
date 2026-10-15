@@ -8,8 +8,18 @@ $destination = Join-Path $env:LOCALAPPDATA "Programs\CuotaX"
 $executable = Join-Path $destination "CuotaX.exe"
 
 & (Join-Path $PSScriptRoot "build.ps1")
-Get-Process -Name "CuotaX" -ErrorAction SilentlyContinue | Stop-Process
+Get-Process -Name "CuotaX" -ErrorAction SilentlyContinue | Stop-Process -PassThru | Wait-Process -Timeout 10
 New-Item -ItemType Directory -Path $destination -Force | Out-Null
-Copy-Item -LiteralPath $source -Destination $executable -Force
+for ($attempt = 0; ; $attempt++) {
+    try {
+        Copy-Item -LiteralPath $source -Destination $executable -Force
+        break
+    } catch [System.IO.IOException] {
+        if ($attempt -ge 20) {
+            throw
+        }
+        Start-Sleep -Milliseconds 250
+    }
+}
 Copy-Item -LiteralPath (Join-Path $projectRoot "dist\windows\claude-statusline.mjs") -Destination $destination -Force
 Start-Process -FilePath $executable -WindowStyle Hidden
