@@ -298,7 +298,7 @@ struct ClaudeClient: Sendable {
     else { return try parseToken(data) }
     let root =
       directory
-      ?? environment["CLAUDE_CONFIG_DIR"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
+      ?? configDirectory.flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
       ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude")
     let lock = try await lockRefresh(root)
     defer { try? FileManager.default.removeItem(at: lock) }
