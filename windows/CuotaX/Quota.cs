@@ -6,13 +6,13 @@ namespace CuotaX;
 
 internal sealed record QuotaWindow(double UsedPercent, DateTimeOffset? ResetsAt);
 
-internal sealed record Quota(QuotaWindow? FiveHour, QuotaWindow? Weekly, DateTimeOffset UpdatedAt)
+internal sealed record Quota(QuotaWindow? FiveHour, QuotaWindow? Weekly, DateTimeOffset UpdatedAt, QuotaWindow? Fable = null)
 {
     internal double? HighestPercent
     {
         get
         {
-            var values = new[] { FiveHour, Weekly }
+            var values = new[] { FiveHour, Weekly, Fable }
                 .Where(value => value is not null)
                 .Select(value => value!.UsedPercent)
                 .ToArray();
@@ -29,6 +29,22 @@ internal sealed record Quota(QuotaWindow? FiveHour, QuotaWindow? Weekly, DateTim
 
         var fiveHour = CrossedReset(previous.FiveHour, previous.UpdatedAt, current.UpdatedAt);
         var weekly = CrossedReset(previous.Weekly, previous.UpdatedAt, current.UpdatedAt);
+        if (CrossedReset(previous.Fable, previous.UpdatedAt, current.UpdatedAt))
+        {
+            if (fiveHour && weekly)
+            {
+                return "5-hour, weekly and Fable weekly quotas reset";
+            }
+            if (fiveHour)
+            {
+                return "5-hour and Fable weekly quotas reset";
+            }
+            if (weekly)
+            {
+                return "Weekly and Fable weekly quotas reset";
+            }
+            return "Fable weekly quota reset";
+        }
         return (fiveHour, weekly) switch
         {
             (true, true) => "5-hour and weekly quotas reset",
@@ -41,7 +57,7 @@ internal sealed record Quota(QuotaWindow? FiveHour, QuotaWindow? Weekly, DateTim
     internal DateTimeOffset? NextReset(DateTimeOffset? now = null)
     {
         var current = now ?? DateTimeOffset.Now;
-        return new[] { FiveHour?.ResetsAt, Weekly?.ResetsAt }
+        return new[] { FiveHour?.ResetsAt, Weekly?.ResetsAt, Fable?.ResetsAt }
             .Where(value => value > current)
             .Min();
     }
@@ -53,6 +69,7 @@ internal sealed record Quota(QuotaWindow? FiveHour, QuotaWindow? Weekly, DateTim
         {
             WindowStatus(FiveHour, "5-hour", QuotaFormatting.FiveHourMinutes, current),
             WindowStatus(Weekly, "weekly", QuotaFormatting.WeeklyMinutes, current),
+            WindowStatus(Fable, "Fable weekly", QuotaFormatting.WeeklyMinutes, current),
         }.Where(value => value is not null).Select(value => value!).ToArray();
 
         if (statuses.Length == 0)
@@ -288,7 +305,7 @@ internal static class QuotaFormatting
         return $"{displayed.ToString(format, CultureInfo.CurrentCulture)}%";
     }
 
-    internal static string Time(DateTimeOffset? value) => value?.ToLocalTime().ToString("t", CultureInfo.CurrentCulture) ?? "—";
+    internal static string Time(DateTimeOffset? value) => value?.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture) ?? "—";
 
     internal static string Reset(
         DateTimeOffset? value,

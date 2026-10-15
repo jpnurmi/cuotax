@@ -41,6 +41,9 @@ import Testing
       == "13:37 (7h)"
   )
   #expect(formatReset(nil) == "reset unknown")
+  #expect(formatTime(date) == "13:37")
+  #expect(formatTime(friday) == "09:48")
+  #expect(formatTime(nil) == "—")
 }
 
 @Test func resetNotification() {
@@ -297,4 +300,52 @@ import Testing
   #expect(formatPercent(nil) == "—")
   #expect(severity(70) == .warning)
   #expect(severity(90) == .critical)
+}
+
+@Test func fableQuota() {
+  let now = Date(timeIntervalSince1970: 1_777_000_000)
+  let quota = Quota(
+    fiveHour: QuotaWindow(usedPercent: 20, resetsAt: now.addingTimeInterval(2 * 60 * 60)),
+    weekly: QuotaWindow(usedPercent: 5, resetsAt: now.addingTimeInterval(6 * 24 * 60 * 60)),
+    updatedAt: now,
+    fable: QuotaWindow(usedPercent: 95, resetsAt: now.addingTimeInterval(6 * 24 * 60 * 60))
+  )
+  #expect(quota.highestPercent == 95)
+  #expect(quota.status(now: now).window == "Fable weekly")
+  #expect(quota.status(now: now).level == .critical)
+
+  let reset = now.addingTimeInterval(60)
+  let previous = Quota(
+    fiveHour: nil, weekly: nil, updatedAt: now,
+    fable: QuotaWindow(usedPercent: 95, resetsAt: reset))
+  let current = Quota(fiveHour: nil, weekly: nil, updatedAt: reset)
+  #expect(previous.nextReset(after: now) == reset)
+  #expect(previous.nextReset(after: reset) == nil)
+  #expect(resetMessage(previous: previous, current: current) == "Fable weekly quota reset")
+  let all = Quota(
+    fiveHour: previous.fable, weekly: previous.fable, updatedAt: now, fable: previous.fable)
+  #expect(
+    resetMessage(previous: all, current: current)
+      == "5-hour, weekly and Fable weekly quotas reset")
+}
+
+@Test func compactPercentages() {
+  let now = Date()
+  func quota(_ fiveHour: Double?, _ weekly: Double?, _ fable: Double? = nil) -> Quota {
+    Quota(
+      fiveHour: fiveHour.map { QuotaWindow(usedPercent: $0, resetsAt: nil) },
+      weekly: weekly.map { QuotaWindow(usedPercent: $0, resetsAt: nil) },
+      updatedAt: now,
+      fable: fable.map { QuotaWindow(usedPercent: $0, resetsAt: nil) }
+    )
+  }
+
+  #expect(formatPercentages(quota(26, 6, 12)) == "26/6/12%")
+  #expect(formatPercentages(quota(42.5, 7)) == "43/7%")
+  #expect(formatPercentages(quota(nil, 8)) == "-/8%")
+  #expect(formatPercentages(quota(nil, nil, 12)) == "-/-/12%")
+  #expect(formatPercentages(quota(-1, 131)) == "0/100%")
+  #expect(formatPercentages(quota(nil, nil)) == "-/-%")
+  #expect(formatPercentages(quota(.nan, .infinity)) == "-/-%")
+  #expect(formatPercentages(quota(26, nil)) == "26/-%")
 }

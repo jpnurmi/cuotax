@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.cuotax" path="/org/gnome/shell/extensions/cuotax/">
+    <key name="provider" type="s">
+      <choices>
+        <choice value="codex"/>
+        <choice value="claude"/>
+      </choices>
+      <default>'codex'</default>
+      <summary>Quota provider</summary>
+    </key>
+    <key name="providers" type="as">
+      <choices>
+        <choice value="codex"/>
+        <choice value="claude"/>
+      </choices>
+      <default>['codex']</default>
+      <summary>Enabled quota providers</summary>
+    </key>
+  </schema>
+</schemalist>

@@ -58,6 +58,7 @@ build:
 
 test:
 	swift test --package-path $(MACOS_DIR)
+	node --test tests/claude-statusline.test.mjs
 
 screenshot:
 	swift run --package-path $(MACOS_DIR) -c release CuotaX --screenshot "$(SCREENSHOT_DIR)/macos.png"
@@ -93,12 +94,15 @@ build:
 
 test:
 	node --check $(GNOME_EXTENSION_DIR)/backend.js
+	node --check $(GNOME_EXTENSION_DIR)/claude.js
 	node --check $(GNOME_EXTENSION_DIR)/extension.js
 	node --check $(GNOME_EXTENSION_DIR)/quota.js
 	node --check $(GNOME_EXTENSION_DIR)/update.js
 	gjs -m $(GNOME_DIR)/tests/test_quota.js
 	gjs -m $(GNOME_DIR)/tests/test_update.js
 	CODEX_TEST_COMMAND="$(CURDIR)/$(GNOME_DIR)/tests/fixtures/codex" gjs -m $(GNOME_DIR)/tests/test_backend.js
+	gjs -m $(GNOME_DIR)/tests/test_claude.js
+	node --test tests/claude-statusline.test.mjs
 
 screenshot:
 	mkdir -p "$(SCREENSHOT_DIR)"
@@ -131,6 +135,7 @@ build:
 
 test:
 	dotnet run --project $(WINDOWS_DIR)/CuotaX.Tests/CuotaX.Tests.csproj --configuration Release
+	node --test tests/claude-statusline.test.mjs
 
 screenshot:
 	dotnet run --project $(WINDOWS_DIR)/CuotaX/CuotaX.csproj --configuration Release -- --screenshot "$(SCREENSHOT_DIR)/windows.png"

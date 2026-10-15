@@ -5,7 +5,7 @@
   "scripts": {
     "format": "prettier --write .. --ignore-path ../.gitignore",
     "format:check": "prettier --check .. --ignore-path ../.gitignore",
-    "lint": "eslint extension scripts tests"
+    "lint": "cd .. && eslint --config gnome/eslint.config.js gnome/extension gnome/scripts gnome/tests scripts tests"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

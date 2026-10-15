@@ -2,8 +2,15 @@
   spacing: 4px;
 }
 
-.cuotax-label {
-  min-width: 2.5em;
+.cuotax-label-stacked {
+  font-size: 0.65em;
+}
+
+.cuotax-update-badge {
+  width: 4px;
+  height: 4px;
+  border-radius: 2px;
+  background-color: #1688f8;
 }
 
 .cuotax-icon {
@@ -24,4 +31,8 @@
 .cuotax-diagnostic {
   opacity: 0.7;
   font-size: 0.9em;
+}
+
+.cuotax-quota {
+  padding-left: 2.5em;
 }

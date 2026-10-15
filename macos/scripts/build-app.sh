@@ -12,6 +12,8 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS"
 cp "$macos_dir/.build/release/CuotaX" "$app/Contents/MacOS/CuotaX"
 cp "$macos_dir/Resources/Info.plist" "$app/Contents/Info.plist"
+mkdir -p "$app/Contents/Resources"
+cp "$repo_dir/scripts/claude-statusline.mjs" "$app/Contents/Resources/claude-statusline.mjs"
 plutil -insert CuotaXBuildCommit -string "$build_commit" "$app/Contents/Info.plist"
 codesign --force --sign - "$app"
 

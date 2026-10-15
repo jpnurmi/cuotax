@@ -29,17 +29,40 @@ export function parseQuota(result, updatedAt = Date.now()) {
     return {fiveHour, weekly, updatedAt};
 }
 
+export function parseClaudeQuota(result, updatedAt = Date.now()) {
+    const window = (value) => {
+        const percent = value?.utilization ?? value?.percent;
+        if (!Number.isFinite(percent)) return null;
+        const reset = typeof value.resets_at === 'string' ? Date.parse(value.resets_at) : NaN;
+        return {usedPercent: percent, resetsAt: Number.isFinite(reset) ? reset : null};
+    };
+    const fiveHour = window(result?.five_hour ?? result?.limits?.find((v) => v.kind === 'session'));
+    const weekly = window(
+        result?.seven_day ?? result?.limits?.find((v) => v.kind === 'weekly_all'),
+    );
+    const fable = window(
+        result?.limits?.find(
+            (v) => v.kind === 'weekly_scoped' && v.scope?.model?.display_name === 'Fable',
+        ),
+    );
+    if (!fiveHour && !weekly && !fable)
+        throw new Error('Claude returned no 5-hour or weekly quota');
+    return {fiveHour, weekly, updatedAt, fable};
+}
+
 export function highestPercent(quota) {
-    const values = [quota?.fiveHour, quota?.weekly]
+    const values = [quota?.fiveHour, quota?.weekly, quota?.fable]
         .map((value) => value?.usedPercent)
         .filter(Number.isFinite);
     return values.length === 0 ? null : Math.max(...values);
 }
 
 export function nextReset(quota, now = Date.now()) {
-    const resets = [quota?.fiveHour?.resetsAt, quota?.weekly?.resetsAt].filter(
-        (value) => Number.isFinite(value) && value > now,
-    );
+    const resets = [
+        quota?.fiveHour?.resetsAt,
+        quota?.weekly?.resetsAt,
+        quota?.fable?.resetsAt,
+    ].filter((value) => Number.isFinite(value) && value > now);
     return resets.length === 0 ? null : Math.min(...resets);
 }
 
@@ -52,6 +75,12 @@ export function resetMessage(previous, current) {
         window.resetsAt <= current.updatedAt;
     const fiveHour = crossedReset(previous.fiveHour);
     const weekly = crossedReset(previous.weekly);
+    if (crossedReset(previous.fable)) {
+        if (fiveHour && weekly) return '5-hour, weekly and Fable weekly quotas reset';
+        if (fiveHour) return '5-hour and Fable weekly quotas reset';
+        if (weekly) return 'Weekly and Fable weekly quotas reset';
+        return 'Fable weekly quota reset';
+    }
 
     if (fiveHour && weekly) return '5-hour and weekly quotas reset';
     if (fiveHour) return '5-hour quota reset';
@@ -68,6 +97,17 @@ export function formatPercent(value) {
     if (displayed === null) return '—';
     const digits = Number.isInteger(displayed) ? 0 : 1;
     return `${displayed.toFixed(digits)}%`;
+}
+
+export function formatPercentages(quota) {
+    if (!quota) return '-';
+    const windows = [quota.fiveHour, quota.weekly];
+    if (quota.fable) windows.push(quota.fable);
+    const values = windows.map((value) => {
+        const displayed = displayPercent(value?.usedPercent);
+        return displayed === null ? '-' : Math.round(displayed);
+    });
+    return `${values.join('/')}%`;
 }
 
 function dateFrom(value) {
@@ -177,6 +217,7 @@ export function quotaStatus(quota, now = Date.now()) {
     const statuses = [
         windowStatus(quota?.fiveHour, '5-hour', FIVE_HOURS_MINUTES, now),
         windowStatus(quota?.weekly, 'weekly', WEEK_MINUTES, now),
+        windowStatus(quota?.fable, 'Fable weekly', WEEK_MINUTES, now),
     ].filter(Boolean);
     if (statuses.length === 0)
         return {

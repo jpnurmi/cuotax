@@ -13,8 +13,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private static readonly TimeSpan UpdateInterval = TimeSpan.FromDays(1);
 
     private readonly CodexClient _client = new();
+    private readonly ClaudeClient _claudeClient = new();
     private readonly UpdateChecker _updateChecker = new();
     private readonly ContextMenuStrip _menu = new();
+    private readonly NotifyIcon _notifyIcon = new();
     private readonly Form _menuOwner = new()
     {
         FormBorderStyle = FormBorderStyle.None,
@@ -23,18 +25,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
         Size = new Size(1, 1),
         StartPosition = FormStartPosition.Manual,
     };
-    private readonly NotifyIcon _notifyIcon = new();
+    private readonly Dictionary<Provider, ProviderState> _providers = new();
     private readonly System.Windows.Forms.Timer _timer = new();
-    private readonly System.Windows.Forms.Timer _resetTimer = new();
     private readonly System.Windows.Forms.Timer _updateTimer = new();
     private readonly CancellationTokenSource _cancellation = new();
     private readonly SynchronizationContext _uiContext;
-    private Icon? _icon;
-    private Quota? _quota;
-    private BackendException? _error;
     private BackendException? _startupError;
-    private bool _refreshing;
-    private bool _queued;
+    private Icon? _icon;
     private bool _started;
     private bool _updateAvailable;
     private bool _disposed;
@@ -46,16 +43,24 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _menu.Closed += MenuClosed;
         _notifyIcon.ContextMenuStrip = _menu;
         _notifyIcon.MouseClick += NotifyIconMouseClick;
-        _notifyIcon.Visible = true;
+        foreach (var provider in LoadProviders())
+        {
+            AddProvider(provider);
+        }
 
         _timer.Interval = (int)RefreshInterval.TotalMilliseconds;
-        _timer.Tick += (_, _) => _ = RefreshAsync();
-        _timer.Start();
-        _resetTimer.Tick += (_, _) =>
+        _timer.Tick += (_, _) =>
         {
-            _resetTimer.Stop();
-            _ = RefreshAsync();
+            foreach (var state in _providers.Values)
+            {
+                if (state.Provider != Provider.Claude || state.Quota is null
+                    || DateTimeOffset.Now - state.Quota.UpdatedAt >= OpenRefreshAge)
+                {
+                    _ = RefreshAsync(state, queue: false);
+                }
+            }
         };
+        _timer.Start();
         _updateTimer.Interval = (int)UpdateInterval.TotalMilliseconds;
         _updateTimer.Tick += (_, _) => _ = CheckForUpdatesAsync();
         _updateTimer.Start();
@@ -86,14 +91,19 @@ internal sealed class TrayApplicationContext : ApplicationContext
             Application.Idle -= Start;
             _cancellation.Cancel();
             _timer.Dispose();
-            _resetTimer.Dispose();
             _updateTimer.Dispose();
             _updateChecker.Dispose();
+            _claudeClient.Dispose();
+            foreach (var state in _providers.Values)
+            {
+                state.Dispose();
+            }
+            _providers.Clear();
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
+            _icon?.Dispose();
             _menu.Dispose();
             _menuOwner.Dispose();
-            _icon?.Dispose();
             _cancellation.Dispose();
         }
 
@@ -109,7 +119,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         _started = true;
         Application.Idle -= Start;
-        _ = RefreshAsync();
+        Refresh();
         _ = CheckForUpdatesAsync();
     }
 
@@ -127,7 +137,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 {
                     return;
                 }
-                _ = RefreshAsync();
+                Refresh();
                 _ = CheckForUpdatesAsync();
             },
             null
@@ -137,9 +147,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private void MenuOpening(object? sender, CancelEventArgs eventArgs)
     {
         RenderMenu();
-        if (_quota is null || DateTimeOffset.Now - _quota.UpdatedAt >= OpenRefreshAge)
+        foreach (var state in _providers.Values)
         {
-            _ = RefreshAsync();
+            if (state.Quota is null || DateTimeOffset.Now - state.Quota.UpdatedAt >= OpenRefreshAge)
+            {
+                _ = RefreshAsync(state);
+            }
         }
     }
 
@@ -163,67 +176,110 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private async Task RefreshAsync()
+    private void Refresh()
     {
-        if (_refreshing)
+        foreach (var state in _providers.Values)
         {
-            _queued = true;
+            _ = RefreshAsync(state);
+        }
+    }
+
+    private bool IsActive(ProviderState state) => !_disposed
+        && _providers.TryGetValue(state.Provider, out var current) && current == state;
+
+    private async Task RefreshAsync(ProviderState state, bool queue = true)
+    {
+        if (!IsActive(state))
+        {
+            return;
+        }
+        if (state.Provider == Provider.Claude)
+        {
+            _claudeClient.WatchUsage(() => _uiContext.Post(
+                _ =>
+                {
+                    if (IsActive(state))
+                    {
+                        _ = RefreshAsync(state);
+                    }
+                },
+                null
+            ));
+        }
+        if (state.Refreshing)
+        {
+            state.Queued |= queue;
             return;
         }
 
-        _refreshing = true;
+        state.Refreshing = true;
+        var provider = state.Provider;
         try
         {
-            var quota = await _client.ReadQuotaAsync(_cancellation.Token);
-            var reset = Quota.ResetMessage(_quota, quota);
-            _quota = quota;
-            _error = null;
-            ScheduleResetRefresh(quota);
+            var quota = provider == Provider.Codex
+                ? await _client.ReadQuotaAsync(state.Cancellation.Token)
+                : await _claudeClient.ReadQuotaAsync(state.Cancellation.Token);
+            if (!IsActive(state))
+            {
+                return;
+            }
+            var reset = Quota.ResetMessage(state.Quota, quota);
+            state.Quota = quota;
+            state.Error = null;
+            ScheduleResetRefresh(state, quota);
             if (reset is not null)
             {
-                _notifyIcon.ShowBalloonTip(5000, "Codex quota reset", reset, ToolTipIcon.Info);
+                _notifyIcon.ShowBalloonTip(5000, $"{provider} quota reset", reset, ToolTipIcon.Info);
             }
         }
         catch (BackendException error)
         {
-            _error = error;
+            if (IsActive(state))
+            {
+                state.Error = error;
+            }
         }
-        catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
+        catch (OperationCanceledException) when (state.Cancellation.IsCancellationRequested)
         {
             return;
         }
         catch (Exception error)
         {
-            _error = new BackendException("Codex quota request failed", error.Message);
+            if (IsActive(state))
+            {
+                state.Error = new BackendException($"{provider} quota request failed", error.Message);
+            }
         }
         finally
         {
-            _refreshing = false;
-            if (!_disposed)
+            state.Refreshing = false;
+            if (IsActive(state))
             {
                 Render();
-                if (_queued)
+                if (state.Queued)
                 {
-                    _queued = false;
-                    _ = RefreshAsync();
+                    state.Queued = false;
+                    _ = RefreshAsync(state);
                 }
             }
         }
     }
 
-    private void ScheduleResetRefresh(Quota quota)
+    private void ScheduleResetRefresh(ProviderState state, Quota quota)
     {
-        _resetTimer.Stop();
-        if (quota.NextReset() is not { } reset)
+        state.ResetTimer.Stop();
+        var expiry = state.Provider == Provider.Claude ? quota.UpdatedAt.AddMinutes(5) : (DateTimeOffset?)null;
+        var next = new[] { quota.NextReset(), expiry }.Where(value => value is not null).Min();
+        if (next is not { } reset)
         {
             return;
         }
 
-        _resetTimer.Interval = Math.Max(
+        state.ResetTimer.Interval = Math.Max(
             1,
             (int)Math.Ceiling((reset - DateTimeOffset.Now).TotalMilliseconds)
         );
-        _resetTimer.Start();
+        state.ResetTimer.Start();
     }
 
     private async Task CheckForUpdatesAsync()
@@ -251,18 +307,23 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void Render()
     {
-        var visual = _quota is not null
-            ? TrayIconRenderer.ForQuota(_quota)
-            : _error is not null || _startupError is not null
-                ? TrayIconRenderer.Error()
-                : TrayIconRenderer.LoadingState();
-        var icon = TrayIconRenderer.Create(visual, _updateAvailable);
+        var stacked = _providers.Count > 1;
+        var visuals = Enum.GetValues<Provider>().Where(_providers.ContainsKey).Select(provider =>
+        {
+            var state = _providers[provider];
+            return state.Quota is not null
+                ? TrayIconRenderer.ForQuota(state.Quota, weeklyOnly: stacked)
+                : state.Error is not null || _startupError is not null
+                    ? TrayIconRenderer.Error()
+                    : TrayIconRenderer.LoadingState();
+        }).ToArray();
+        var icon = TrayIconRenderer.Create(visuals, _updateAvailable);
         var previous = _icon;
         _icon = icon;
         _notifyIcon.Icon = icon;
-        previous?.Dispose();
-
         _notifyIcon.Text = Tooltip();
+        _notifyIcon.Visible = true;
+        previous?.Dispose();
         if (!_menu.Visible)
         {
             RenderMenu();
@@ -271,18 +332,22 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private string Tooltip()
     {
-        if (_quota is not null)
+        var labels = Enum.GetValues<Provider>().Where(_providers.ContainsKey).Select(provider =>
         {
-            var percent = QuotaFormatting.Percent(_quota.HighestPercent);
-            var update = _updateAvailable ? ", update available" : string.Empty;
-            return Shorten(
-                $"CuotaX — {percent} used, {_quota.Status().PaceLabel.ToLowerInvariant()}{update}"
-            );
-        }
-
-        var error = _error ?? _startupError;
-        var label = error is null ? "CuotaX — loading" : $"CuotaX unavailable — {error.Message}";
-        return Shorten(label + (_updateAvailable ? ", update available" : string.Empty));
+            var state = _providers[provider];
+            if (state.Quota is { } quota)
+            {
+                var fable = quota.Fable is { } window
+                    ? $", Fable {QuotaFormatting.Percent(window.UsedPercent)}"
+                    : string.Empty;
+                return $"{provider}: weekly {QuotaFormatting.Percent(quota.Weekly?.UsedPercent)}, 5h {QuotaFormatting.Percent(quota.FiveHour?.UsedPercent)}{fable}";
+            }
+            return state.Error is not null || _startupError is not null
+                ? $"{provider} unavailable"
+                : $"{provider} loading";
+        });
+        return Shorten("CuotaX\n" + string.Join('\n', labels)
+            + (_updateAvailable ? "\nUpdate available" : string.Empty));
     }
 
     private void RenderMenu()
@@ -294,39 +359,58 @@ internal sealed class TrayApplicationContext : ApplicationContext
             item.Dispose();
         }
 
-        if (_quota is not null)
+        foreach (var provider in Enum.GetValues<Provider>())
         {
-            AddWindow("5-hour", _quota.FiveHour, fiveHour: true);
-            AddWindow("Weekly", _quota.Weekly, fiveHour: false);
-            if (_error is not null)
+            _providers.TryGetValue(provider, out var state);
+            var item = new ToolStripMenuItem(provider.ToString())
+            {
+                Checked = _providers.ContainsKey(provider),
+                Enabled = !_providers.ContainsKey(provider) || _providers.Count > 1,
+            };
+            item.Click += (_, _) => ToggleProvider(provider);
+            _menu.Items.Add(item);
+            if (state is null)
             {
                 _menu.Items.Add(new ToolStripSeparator());
-                AddInfo("Refresh failed · showing previous data");
-                AddInfo(_error.Diagnostic);
+                continue;
             }
-            if (_startupError is not null)
+            if (state.Quota is { } quota)
             {
-                _menu.Items.Add(new ToolStripSeparator());
-                AddInfo(_startupError.Message);
-                AddInfo(_startupError.Diagnostic);
+                AddWindow("5-hour", quota.FiveHour, fiveHour: true);
+                AddWindow("Weekly", quota.Weekly, fiveHour: false);
+                if (quota.Fable is { } fable)
+                {
+                    AddWindow("Fable weekly", fable, fiveHour: false);
+                }
+                if (state.Error is { } error)
+                {
+                    AddInfo("Refresh failed · showing previous data");
+                    AddInfo(error.Diagnostic);
+                }
+            }
+            else if (state.Error is { } error)
+            {
+                AddInfo(error.Message);
+                AddInfo(error.Diagnostic);
+            }
+            else
+            {
+                AddInfo($"Loading {provider} quota…");
             }
             _menu.Items.Add(new ToolStripSeparator());
-            AddInfo($"Updated {QuotaFormatting.Time(_quota.UpdatedAt)}");
         }
-        else if (_error is not null || _startupError is not null)
+        if (_startupError is not null)
         {
-            var error = _error ?? _startupError!;
-            AddInfo(error.Message);
-            AddInfo(error.Diagnostic);
-        }
-        else
-        {
-            AddInfo("Loading Codex quota…");
+            AddInfo(_startupError.Message);
+            AddInfo(_startupError.Diagnostic);
+            _menu.Items.Add(new ToolStripSeparator());
         }
 
-        _menu.Items.Add(new ToolStripSeparator());
-        var refresh = new ToolStripMenuItem("Refresh");
-        refresh.Click += (_, _) => _ = RefreshAsync();
+        var updated = _providers.Values.Select(state => state.Quota?.UpdatedAt).Max();
+        var refresh = new ToolStripMenuItem(
+            updated is { } time ? $"Refresh ({QuotaFormatting.Time(time)})" : "Refresh"
+        );
+        refresh.Click += (_, _) => Refresh();
         _menu.Items.Add(refresh);
 
         _menu.Items.Add(new ToolStripSeparator());
@@ -359,6 +443,92 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private void AddInfo(string text)
     {
         _menu.Items.Add(new ToolStripMenuItem(text) { Enabled = false });
+    }
+
+    private void AddProvider(Provider provider)
+    {
+        var state = new ProviderState(provider);
+        state.ResetTimer.Tick += (_, _) =>
+        {
+            state.ResetTimer.Stop();
+            _ = RefreshAsync(state, queue: false);
+        };
+        _providers.Add(provider, state);
+    }
+
+    private void ToggleProvider(Provider provider)
+    {
+        if (_providers.ContainsKey(provider))
+        {
+            if (_providers.Count == 1)
+            {
+                return;
+            }
+            _providers.Remove(provider, out var state);
+            state!.Dispose();
+            if (provider == Provider.Claude)
+            {
+                _claudeClient.StopWatching();
+            }
+        }
+        else
+        {
+            AddProvider(provider);
+            _ = RefreshAsync(_providers[provider]);
+        }
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(@"Software\CuotaX");
+            key.SetValue("Providers", Enum.GetValues<Provider>().Where(_providers.ContainsKey)
+                .Select(value => value.ToString()).ToArray(), RegistryValueKind.MultiString);
+        }
+        catch (Exception error)
+        {
+            _startupError = new BackendException("Could not save provider", error.Message);
+        }
+        Render();
+    }
+
+    private static HashSet<Provider> LoadProviders()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\CuotaX");
+            if (key?.GetValue("Providers") is string[] values)
+            {
+                var providers = values.Select(value => Enum.TryParse<Provider>(value, out var provider)
+                    && Enum.IsDefined(provider) ? provider : (Provider?)null)
+                    .Where(value => value is not null).Select(value => value!.Value).ToHashSet();
+                if (providers.Count > 0)
+                {
+                    return providers;
+                }
+            }
+            return Enum.TryParse<Provider>(key?.GetValue("Provider") as string, out var provider)
+                && Enum.IsDefined(provider) ? [provider] : [Provider.Codex];
+        }
+        catch
+        {
+            return [Provider.Codex];
+        }
+    }
+
+    private sealed class ProviderState(Provider provider) : IDisposable
+    {
+        internal Provider Provider { get; } = provider;
+        internal System.Windows.Forms.Timer ResetTimer { get; } = new();
+        internal CancellationTokenSource Cancellation { get; } = new();
+        internal Quota? Quota { get; set; }
+        internal BackendException? Error { get; set; }
+        internal bool Refreshing { get; set; }
+        internal bool Queued { get; set; }
+
+        public void Dispose()
+        {
+            Cancellation.Cancel();
+            ResetTimer.Dispose();
+            Cancellation.Dispose();
+        }
     }
 
     private static string Shorten(string value) => value.Length <= 127 ? value : value[..127];
