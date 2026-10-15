@@ -80,9 +80,11 @@ The installed bridge is located at:
 
 The bridge displays Claude quota usage and atomically writes only usage
 percentages, reset times, and an update timestamp to
-`~/.claude/cuotax-usage.json` (or under `CLAUDE_CONFIG_DIR`). CuotaX reads this
-file immediately when it changes. When Claude stops supplying updates, polling
-resumes after five minutes. Idle sessions also fall back to polling once their data is stale.
+`~/.claude/cuotax-usage.json` (or under `CLAUDE_CONFIG_DIR`). On macOS,
+`CLAUDE_SECURESTORAGE_CONFIG_DIR` takes precedence for this cache, matching
+credential selection. CuotaX reads this file immediately when it changes. When
+Claude stops supplying updates, polling resumes after five minutes. Idle sessions
+also fall back to polling once their data is stale.
 If you already use a custom status line, pass the same stdin JSON to both the
 bridge and your existing command.
 

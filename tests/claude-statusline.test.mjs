@@ -8,13 +8,26 @@ import test from 'node:test';
 
 import {parseClaudeQuota} from '../gnome/extension/quota.js';
 
-async function run(t, input) {
-    const directory = await mkdtemp(join(tmpdir(), 'cuotax-statusline-'));
+async function run(t, input, {directory, environment = {}, platform = process.platform} = {}) {
+    directory ??= await mkdtemp(join(tmpdir(), 'cuotax-statusline-'));
     t.after(() => rm(directory, {recursive: true, force: true}));
-    const result = spawnSync(process.execPath, ['scripts/claude-statusline.mjs'], {
+    const args =
+        platform === process.platform
+            ? ['scripts/claude-statusline.mjs']
+            : [
+                  '--input-type=module',
+                  '--eval',
+                  `Object.defineProperty(process, 'platform', {value: ${JSON.stringify(platform)}}); await import('./scripts/claude-statusline.mjs');`,
+              ];
+    const result = spawnSync(process.execPath, args, {
         input: typeof input === 'string' ? input : JSON.stringify(input),
         encoding: 'utf8',
-        env: {...process.env, CLAUDE_CONFIG_DIR: directory},
+        env: {
+            ...process.env,
+            CLAUDE_SECURESTORAGE_CONFIG_DIR: undefined,
+            ...environment,
+            CLAUDE_CONFIG_DIR: directory,
+        },
     });
     return {directory, result};
 }
@@ -145,4 +158,45 @@ test('unavailable Fable usage leaves the overall weekly quota intact', () => {
         assert.equal(quota.weekly.usedPercent, 5);
         assert.equal(quota.fable, null);
     }
+});
+
+test('macOS status-line caches follow the secure-storage directory', async (t) => {
+    const directory = await mkdtemp(join(tmpdir(), 'cuotax-statusline-'));
+    for (const [account, percent] of [
+        ['first', 42],
+        ['second', 98],
+    ]) {
+        const {result} = await run(
+            t,
+            {rate_limits: {five_hour: {used_percentage: percent}}},
+            {
+                directory,
+                platform: 'darwin',
+                environment: {CLAUDE_SECURESTORAGE_CONFIG_DIR: join(directory, account)},
+            },
+        );
+        assert.equal(result.status, 0, result.stderr);
+    }
+    for (const [account, percent] of [
+        ['first', 42],
+        ['second', 98],
+    ]) {
+        const usage = JSON.parse(
+            await readFile(join(directory, account, 'cuotax-usage.json'), 'utf8'),
+        );
+        assert.equal(parseClaudeQuota(usage).fiveHour.usedPercent, percent);
+    }
+    assert.deepEqual((await readdir(directory)).sort(), ['first', 'second']);
+});
+
+test('other platforms keep status-line caches in the config directory', async (t) => {
+    const {directory, result} = await run(
+        t,
+        {rate_limits: {five_hour: {used_percentage: 42}}},
+        {platform: 'linux', environment: {CLAUDE_SECURESTORAGE_CONFIG_DIR: 'unused'}},
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const usage = JSON.parse(await readFile(join(directory, 'cuotax-usage.json'), 'utf8'));
+    assert.equal(parseClaudeQuota(usage).fiveHour.usedPercent, 42);
+    assert.deepEqual(await readdir(directory), ['cuotax-usage.json']);
 });

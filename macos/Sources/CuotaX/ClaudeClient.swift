@@ -18,13 +18,23 @@ struct ClaudeClient: Sendable {
   init(
     token: TokenLoader? = nil,
     load: @escaping Loader = ClaudeClient.load,
-    cacheURL: URL? = ClaudeClient.cacheURL(),
+    cacheURL: URL?,
     credentialsDirectory: URL? = nil
   ) {
     self.token = token
     self.load = load
     self.cacheURL = cacheURL
     self.directory = credentialsDirectory
+  }
+
+  init(
+    token: TokenLoader? = nil,
+    load: @escaping Loader = ClaudeClient.load,
+    credentialsDirectory: URL? = nil
+  ) {
+    self.init(
+      token: token, load: load, cacheURL: Self.cacheURL(directory: credentialsDirectory),
+      credentialsDirectory: credentialsDirectory)
   }
 
   func readQuota() async throws -> Quota {
@@ -278,9 +288,7 @@ struct ClaudeClient: Sendable {
   {
     let environment = ProcessInfo.processInfo.environment
     if let token = environment["CLAUDE_CODE_OAUTH_TOKEN"], !token.isEmpty { return token }
-    let configDirectory =
-      directory?.path
-      ?? environment["CLAUDE_SECURESTORAGE_CONFIG_DIR"] ?? environment["CLAUDE_CONFIG_DIR"]
+    let configDirectory = Self.configDirectory(directory: directory, environment: environment)
     let (data, storage) = try readCredentials(
       directory: directory, configDirectory: configDirectory)
     var oauth = try parseCredentials(data)["claudeAiOauth"] as! [String: Any]
@@ -368,12 +376,20 @@ struct ClaudeClient: Sendable {
     throw renewalFailed("Could not save the renewed credentials")
   }
 
-  private static func cacheURL() -> URL {
+  static func cacheURL(
+    directory: URL? = nil,
+    environment: [String: String] = ProcessInfo.processInfo.environment
+  ) -> URL {
     let directory =
-      ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"]
-      .flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
+      configDirectory(directory: directory, environment: environment)
+        .flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
       ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude")
     return directory.appendingPathComponent("cuotax-usage.json")
+  }
+
+  private static func configDirectory(directory: URL?, environment: [String: String]) -> String? {
+    directory?.path
+      ?? environment["CLAUDE_SECURESTORAGE_CONFIG_DIR"] ?? environment["CLAUDE_CONFIG_DIR"]
   }
 
   private static func load(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {

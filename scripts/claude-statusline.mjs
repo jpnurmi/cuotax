@@ -37,7 +37,11 @@ async function main() {
     );
     if (!fiveHour && !weekly && !fable) return;
 
-    const directory = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
+    const configDirectory =
+        process.platform === 'darwin'
+            ? (process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR)
+            : process.env.CLAUDE_CONFIG_DIR;
+    const directory = configDirectory || join(homedir(), '.claude');
     const path = join(directory, 'cuotax-usage.json');
     const temporary = `${path}.${randomUUID()}.tmp`;
     await mkdir(directory, {recursive: true, mode: 0o700});

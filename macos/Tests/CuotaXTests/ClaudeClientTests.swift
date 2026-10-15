@@ -526,3 +526,58 @@ private actor QuotaGate {
     continuation = nil
   }
 }
+
+@Test func claudeCacheFollowsCredentialSelection() {
+  let directory = URL(fileURLWithPath: "/tmp/claude-config")
+  let secure = URL(fileURLWithPath: "/tmp/claude-secure")
+  let home = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude")
+  for (environment, expected) in [
+    ([:], home),
+    (["CLAUDE_CONFIG_DIR": ""], home),
+    (["CLAUDE_CONFIG_DIR": directory.path], directory),
+    (["CLAUDE_SECURESTORAGE_CONFIG_DIR": secure.path], secure),
+    (
+      ["CLAUDE_CONFIG_DIR": directory.path, "CLAUDE_SECURESTORAGE_CONFIG_DIR": secure.path],
+      secure
+    ),
+    (["CLAUDE_CONFIG_DIR": directory.path, "CLAUDE_SECURESTORAGE_CONFIG_DIR": ""], home),
+  ] {
+    #expect(
+      ClaudeClient.cacheURL(environment: environment)
+        == expected.appendingPathComponent("cuotax-usage.json"))
+  }
+  #expect(
+    ClaudeClient.cacheURL(
+      directory: directory, environment: ["CLAUDE_SECURESTORAGE_CONFIG_DIR": secure.path])
+      == directory.appendingPathComponent("cuotax-usage.json"))
+}
+
+@Test func claudeStatusLineCachesStayWithCredentialStores() async throws {
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let first = directory.appendingPathComponent("first")
+  let second = directory.appendingPathComponent("second")
+  for root in [first, second] {
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+  }
+  let load: ClaudeClient.Loader = { request in
+    (
+      claudeUsage,
+      HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+    )
+  }
+  let firstClient = ClaudeClient(token: { "fixture-token" }, load: load, credentialsDirectory: first)
+  let secondClient = ClaudeClient(token: { "fixture-token" }, load: load, credentialsDirectory: second)
+  let firstURL = first.appendingPathComponent("cuotax-usage.json")
+  let secondURL = second.appendingPathComponent("cuotax-usage.json")
+  let updatedAt = Date().timeIntervalSince1970 * 1000
+  try Data("{\"updatedAt\":\(updatedAt),\"five_hour\":{\"utilization\":98}}".utf8).write(to: firstURL)
+  #expect(firstClient.cacheURL == firstURL)
+  #expect(secondClient.cacheURL == secondURL)
+  #expect(try await firstClient.readQuota().fiveHour?.usedPercent == 98)
+  #expect(try await secondClient.readQuota().fiveHour?.usedPercent == 42)
+  try Data("{\"updatedAt\":\(updatedAt),\"five_hour\":{\"utilization\":7}}".utf8).write(to: secondURL)
+  #expect(try await firstClient.readQuota().fiveHour?.usedPercent == 98)
+  #expect(try await secondClient.readQuota().fiveHour?.usedPercent == 7)
+  #expect(ClaudeClient(cacheURL: nil, credentialsDirectory: first).cacheURL == nil)
+}
