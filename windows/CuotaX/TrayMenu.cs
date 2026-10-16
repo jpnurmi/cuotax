@@ -13,6 +13,27 @@ internal sealed class TrayMenu : ContextMenuStrip
         Renderer = new MenuRenderer();
     }
 
+    internal void AddWindow(string label, QuotaWindow? window, bool fiveHour, DateTimeOffset? now = null)
+    {
+        var status = Quota.StatusFor(
+            window,
+            fiveHour ? "5-hour" : "weekly",
+            fiveHour ? QuotaFormatting.FiveHourMinutes : QuotaFormatting.WeeklyMinutes,
+            now
+        );
+        var reference = status.OnTrackPercent is null
+            ? string.Empty
+            : $" ({(status.Level == QuotaLevel.Normal ? "≤" : ">")}{QuotaFormatting.Percent(status.OnTrackPercent)})";
+        var text = window is null
+            ? $"{label}  —"
+            : $"{label}  {QuotaFormatting.Percent(window.UsedPercent)}{reference} · {QuotaFormatting.Reset(window.ResetsAt, now, includeDate: !fiveHour)}";
+        Items.Add(new ToolStripMenuItem(text)
+        {
+            Enabled = false,
+            Tag = status,
+        });
+    }
+
     protected override Padding DefaultPadding
     {
         get
@@ -90,12 +111,28 @@ internal sealed class TrayMenu : ContextMenuStrip
             if (SystemInformation.HighContrast)
             {
                 base.OnRenderItemText(eventArgs);
-                return;
             }
-
-            TextRenderer.DrawText(eventArgs.Graphics, eventArgs.Text, eventArgs.TextFont,
-                eventArgs.TextRectangle, eventArgs.Item.Enabled ? SystemColors.MenuText : SystemColors.GrayText,
-                eventArgs.TextFormat);
+            else
+            {
+                TextRenderer.DrawText(eventArgs.Graphics, eventArgs.Text, eventArgs.TextFont,
+                    eventArgs.TextRectangle, eventArgs.Item.Enabled ? SystemColors.MenuText : SystemColors.GrayText,
+                    eventArgs.TextFormat);
+            }
+            if (eventArgs.Item.Tag is QuotaStatus status && eventArgs.ToolStrip is { } menu)
+            {
+                var pace = QuotaFormatting.Color(status);
+                var color = pace is { } value
+                    ? Color.FromArgb(value.Red, value.Green, value.Blue)
+                    : SystemColors.GrayText;
+                var size = menu.LogicalToDeviceUnits(8);
+                var x = GutterCenter(eventArgs.Item, menu) - size / 2f;
+                var y = (eventArgs.Item.Height - size) / 2f;
+                var state = eventArgs.Graphics.Save();
+                eventArgs.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                using var brush = new SolidBrush(color);
+                eventArgs.Graphics.FillEllipse(brush, x, y, size, size);
+                eventArgs.Graphics.Restore(state);
+            }
         }
 
         protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs eventArgs)
@@ -125,13 +162,7 @@ internal sealed class TrayMenu : ContextMenuStrip
             var x = bounds.Left + bounds.Width / 2f;
             if (eventArgs.ToolStrip is { } menu)
             {
-                var rightToLeft = eventArgs.Item.RightToLeft == RightToLeft.Yes;
-                var gutter = rightToLeft ? menu.Padding.Right : menu.Padding.Left;
-                x = (4 * scale + gutter) / 2f;
-                if (rightToLeft)
-                {
-                    x = eventArgs.Item.Width - x;
-                }
+                x = GutterCenter(eventArgs.Item, menu);
             }
             var y = bounds.Top + bounds.Height / 2f;
             var state = eventArgs.Graphics.Save();
@@ -149,6 +180,14 @@ internal sealed class TrayMenu : ContextMenuStrip
                 new PointF(x + 4.5f * scale, y - 3.5f * scale),
             ]);
             eventArgs.Graphics.Restore(state);
+        }
+
+        private static float GutterCenter(ToolStripItem item, ToolStrip menu)
+        {
+            var rightToLeft = item.RightToLeft == RightToLeft.Yes;
+            var gutter = rightToLeft ? menu.Padding.Right : menu.Padding.Left;
+            var x = (menu.LogicalToDeviceUnits(4) + gutter) / 2f;
+            return rightToLeft ? item.Width - x : x;
         }
     }
 }

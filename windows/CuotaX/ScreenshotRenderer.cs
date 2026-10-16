@@ -53,61 +53,39 @@ internal static class ScreenshotRenderer
 
     private static void DrawMenu(Graphics graphics)
     {
-        var bounds = new RectangleF(165, 35, 535, 434);
+        using var menu = new TrayMenu();
+        menu.Items.Add(new ToolStripMenuItem("Codex") { Checked = true });
+        menu.AddWindow("5-hour", Fixture.FiveHour, fiveHour: true, Now);
+        menu.AddWindow("Weekly", Fixture.Weekly, fiveHour: false, Now);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem("Claude") { Checked = true });
+        menu.AddWindow("5-hour", ClaudeFixture.FiveHour, fiveHour: true, Now);
+        menu.AddWindow("Weekly", ClaudeFixture.Weekly, fiveHour: false, Now);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem($"Refresh ({QuotaFormatting.Time(Fixture.UpdatedAt)})"));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem("Quit CuotaX"));
+        menu.Size = menu.GetPreferredSize(Size.Empty);
+        using var image = new Bitmap(menu.Width, menu.Height, PixelFormat.Format32bppArgb);
+        menu.DrawToBitmap(image, new Rectangle(Point.Empty, menu.Size));
+
+        var bounds = new RectangleF(700 - menu.Width, 469 - menu.Height, menu.Width, menu.Height);
+        var radius = menu.LogicalToDeviceUnits(4);
         using (var shadowPath = RoundedRectangle(
             new RectangleF(bounds.X + 4, bounds.Y + 5, bounds.Width, bounds.Height),
-            10
+            radius
         ))
         using (var shadow = new SolidBrush(Color.FromArgb(72, 0, 0, 0)))
         {
             graphics.FillPath(shadow, shadowPath);
         }
-        using (var path = RoundedRectangle(bounds, 10))
-        using (var menu = new SolidBrush(Color.FromArgb(246, 246, 246)))
-        using (var border = new Pen(Color.FromArgb(180, 186, 190), 1))
+        using (var path = RoundedRectangle(bounds, radius))
         {
-            graphics.FillPath(menu, path);
-            graphics.DrawPath(border, path);
+            var state = graphics.Save();
+            graphics.SetClip(path);
+            graphics.DrawImageUnscaled(image, (int)bounds.X, (int)bounds.Y);
+            graphics.Restore(state);
         }
-
-        DrawText(graphics, "✓  Codex", 190, 57, Color.FromArgb(30, 30, 30));
-        DrawWindow(graphics, "5-hour", Fixture.FiveHour!, true, 94);
-        DrawWindow(graphics, "Weekly", Fixture.Weekly!, false, 136);
-        Separator(graphics, 176);
-        DrawText(graphics, "✓  Claude", 190, 199, Color.FromArgb(30, 30, 30));
-        DrawWindow(graphics, "5-hour", ClaudeFixture.FiveHour!, true, 233);
-        DrawWindow(graphics, "Weekly", ClaudeFixture.Weekly!, false, 275);
-        Separator(graphics, 317);
-        DrawText(graphics, $"Refresh ({QuotaFormatting.Time(Fixture.UpdatedAt)})", 190, 345, Color.FromArgb(30, 30, 30));
-        Separator(graphics, 385);
-        DrawText(graphics, "Quit CuotaX", 190, 407, Color.FromArgb(30, 30, 30));
-    }
-
-    private static void DrawWindow(
-        Graphics graphics,
-        string label,
-        QuotaWindow window,
-        bool fiveHour,
-        float y
-    )
-    {
-        var status = Quota.StatusFor(
-            window,
-            fiveHour ? "5-hour" : "weekly",
-            fiveHour ? QuotaFormatting.FiveHourMinutes : QuotaFormatting.WeeklyMinutes,
-            Now
-        );
-        var pace = QuotaFormatting.Color(status) ?? new PaceColor(113, 113, 122);
-        using (var dot = new SolidBrush(Color.FromArgb(pace.Red, pace.Green, pace.Blue)))
-        {
-            graphics.FillEllipse(dot, 190, y + 6, 8, 8);
-        }
-
-        var comparison = window.UsedPercent <= status.OnTrackPercent ? "≤" : ">";
-        var reset = QuotaFormatting.Reset(window.ResetsAt, Now, includeDate: !fiveHour);
-        var title =
-            $"{label}  {QuotaFormatting.Percent(window.UsedPercent)} ({comparison}{QuotaFormatting.Percent(status.OnTrackPercent)}) · {reset}";
-        DrawText(graphics, title, 213, y, Color.FromArgb(30, 30, 30));
     }
 
     private static void DrawTaskbar(Graphics graphics)
@@ -130,19 +108,6 @@ internal static class ScreenshotRenderer
         using var clockFont = new Font("Segoe UI", 12, FontStyle.Regular, GraphicsUnit.Pixel);
         graphics.DrawString("12:23 PM", clockFont, white, 657, 489);
         graphics.DrawString("8/28/2026", clockFont, white, 657, 506);
-    }
-
-    private static void DrawText(Graphics graphics, string value, float x, float y, Color color)
-    {
-        using var font = new Font("Segoe UI", 16, FontStyle.Regular, GraphicsUnit.Pixel);
-        using var brush = new SolidBrush(color);
-        graphics.DrawString(value, font, brush, x, y);
-    }
-
-    private static void Separator(Graphics graphics, float y)
-    {
-        using var pen = new Pen(Color.FromArgb(214, 214, 214), 1);
-        graphics.DrawLine(pen, 180, y, 685, y);
     }
 
     private static GraphicsPath RoundedRectangle(RectangleF bounds, float radius)
