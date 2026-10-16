@@ -37,6 +37,7 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("Claude login concurrency", TestClaudeConcurrentRenewal),
     ("stacked tray icon", TestStackedTrayIcon),
     ("native tray icon", TestNativeTrayIcon),
+    ("stacked tray text size", TestStackedTrayTextSize),
 };
 
 if (Environment.GetEnvironmentVariable("CODEX_TEST_LIVE") == "1")
@@ -303,6 +304,29 @@ static Task TestStackedTrayIcon()
     using var icon = TrayIconRenderer.Create(rows);
     True(icon.Handle != nint.Zero);
 
+    return Task.CompletedTask;
+}
+
+static Task TestStackedTrayTextSize()
+{
+    var rows = new[]
+    {
+        new TrayIconVisual("42%", Color.White, Color.Black),
+        new TrayIconVisual("6%", Color.White, Color.Black),
+    };
+    foreach (var size in new[] { 16, 20, 24, 32 })
+    {
+        using var image = TrayIconRenderer.Render(rows, size);
+        var heights = Enumerable.Range(0, rows.Length).Select(row =>
+        {
+            var ink = Enumerable.Range(row * size / 2, size / 2)
+                .Where(y => Enumerable.Range(0, size).Any(x => image.GetPixel(x, y).A > 16))
+                .ToArray();
+            True(ink.Length > 0);
+            return ink[^1] - ink[0] + 1;
+        }).ToArray();
+        Equal(heights[0], heights[1]);
+    }
     return Task.CompletedTask;
 }
 

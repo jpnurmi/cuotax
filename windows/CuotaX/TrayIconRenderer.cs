@@ -110,11 +110,16 @@ internal static class TrayIconRenderer
             {
                 using var glyph = new GraphicsPath();
                 using var family = new FontFamily("Segoe UI");
+                // a fixed reference keeps both rows and changing percentages at the same font size
+                const string referenceLabel = "99%";
+                glyph.AddString(referenceLabel, family, (int)FontStyle.Regular, size, PointF.Empty, StringFormat.GenericTypographic);
+                var referenceBounds = glyph.GetBounds();
+                using var reference = new Font(family, size, FontStyle.Regular, GraphicsUnit.Pixel);
+                var width = graphics.MeasureString(referenceLabel, reference, 1000, StringFormat.GenericTypographic).Width;
+                var scale = Math.Min(rowBounds.Width / width, (rowBounds.Height - size / 32f) / referenceBounds.Height);
+                glyph.Reset();
                 glyph.AddString(visual.Label, family, (int)FontStyle.Regular, size, PointF.Empty, StringFormat.GenericTypographic);
                 var glyphBounds = glyph.GetBounds();
-                using var reference = new Font(family, size, FontStyle.Regular, GraphicsUnit.Pixel);
-                var width = graphics.MeasureString(visual.Label, reference, 1000, StringFormat.GenericTypographic).Width;
-                var scale = Math.Min(rowBounds.Width / width, (rowBounds.Height - size / 32f) / glyphBounds.Height);
                 var origin = new PointF(
                     rowBounds.X + (rowBounds.Width - glyphBounds.Width * scale) / 2 - glyphBounds.X * scale,
                     rowBounds.Y + (rowBounds.Height - glyphBounds.Height * scale) / 2 - glyphBounds.Y * scale

@@ -103,8 +103,13 @@ internal static class ScreenshotRenderer
             TrayIconRenderer.ForQuota(Fixture, Now, weeklyOnly: true),
             TrayIconRenderer.ForQuota(ClaudeFixture, Now, weeklyOnly: true),
         };
-        using var icon = TrayIconRenderer.Render(visuals, 32, updateAvailable: false);
-        graphics.DrawImage(icon, new Rectangle(616, 490, 32, 32));
+        using var icon = TrayIconRenderer.Create(visuals);
+        graphics.DrawIconUnstretched(icon, new Rectangle(
+            616 + (32 - icon.Width) / 2,
+            490 + (32 - icon.Height) / 2,
+            icon.Width,
+            icon.Height
+        ));
         using var clockFont = new Font("Segoe UI", 12, FontStyle.Regular, GraphicsUnit.Pixel);
         graphics.DrawString("12:23 PM", clockFont, white, 657, 489);
         graphics.DrawString("8/28/2026", clockFont, white, 657, 506);
