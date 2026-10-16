@@ -53,7 +53,8 @@ internal static class ScreenshotRenderer
 
     private static void DrawMenu(Graphics graphics)
     {
-        using var menu = new TrayMenu();
+        using var font = new Font("Segoe UI", 16, FontStyle.Regular, GraphicsUnit.Pixel);
+        using var menu = new TrayMenu { Font = font };
         menu.Items.Add(new ToolStripMenuItem("Codex") { Checked = true });
         menu.AddWindow("5-hour", Fixture.FiveHour, fiveHour: true, Now);
         menu.AddWindow("Weekly", Fixture.Weekly, fiveHour: false, Now);
@@ -65,15 +66,20 @@ internal static class ScreenshotRenderer
         menu.Items.Add(new ToolStripMenuItem($"Refresh ({QuotaFormatting.Time(Fixture.UpdatedAt)})"));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem("Quit CuotaX"));
-        menu.Size = menu.GetPreferredSize(Size.Empty);
+        foreach (ToolStripItem item in menu.Items)
+        {
+            if (item is ToolStripMenuItem)
+            {
+                item.Padding = new Padding(0, 13, 0, 13);
+            }
+        }
+        menu.AutoSize = false;
+        menu.Size = new Size(535, 434);
         using var image = new Bitmap(menu.Width, menu.Height, PixelFormat.Format32bppArgb);
         menu.DrawToBitmap(image, new Rectangle(Point.Empty, menu.Size));
 
-        var scale = Math.Min(535f / menu.Width, 434f / menu.Height);
-        var width = (int)Math.Round(menu.Width * scale);
-        var height = (int)Math.Round(menu.Height * scale);
-        var bounds = new Rectangle(700 - width, 469 - height, width, height);
-        var radius = menu.LogicalToDeviceUnits(4) * scale;
+        var bounds = new Rectangle(165, 35, menu.Width, menu.Height);
+        var radius = menu.LogicalToDeviceUnits(4);
         using (var shadowPath = RoundedRectangle(
             new RectangleF(bounds.X + 4, bounds.Y + 5, bounds.Width, bounds.Height),
             radius
@@ -86,11 +92,7 @@ internal static class ScreenshotRenderer
         {
             var state = graphics.Save();
             graphics.SetClip(path);
-            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            using var attributes = new ImageAttributes();
-            attributes.SetWrapMode(WrapMode.TileFlipXY);
-            graphics.DrawImage(image, bounds, 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, attributes);
+            graphics.DrawImageUnscaled(image, bounds.Location);
             graphics.Restore(state);
         }
     }

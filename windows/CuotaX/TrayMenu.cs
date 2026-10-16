@@ -78,6 +78,21 @@ internal sealed class TrayMenu : ContextMenuStrip
 
     private sealed class MenuRenderer : ToolStripSystemRenderer
     {
+        protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs eventArgs)
+        {
+            if (SystemInformation.HighContrast)
+            {
+                base.OnRenderToolStripBorder(eventArgs);
+                return;
+            }
+
+            var bounds = eventArgs.ToolStrip.ClientRectangle;
+            bounds.Width -= 1;
+            bounds.Height -= 1;
+            using var pen = new Pen(Color.FromArgb(40, SystemColors.MenuText));
+            eventArgs.Graphics.DrawRectangle(pen, bounds);
+        }
+
         protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs eventArgs)
         {
             if (SystemInformation.HighContrast)
