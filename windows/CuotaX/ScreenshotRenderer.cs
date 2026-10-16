@@ -2,6 +2,7 @@
 
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Globalization;
 
 namespace CuotaX;
 
@@ -63,7 +64,7 @@ internal static class ScreenshotRenderer
         menu.AddWindow("5-hour", ClaudeFixture.FiveHour, fiveHour: true, Now);
         menu.AddWindow("Weekly", ClaudeFixture.Weekly, fiveHour: false, Now);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(new ToolStripMenuItem($"Refresh ({QuotaFormatting.Time(Fixture.UpdatedAt)})"));
+        menu.Items.Add(new ToolStripMenuItem($"Refresh ({Fixture.UpdatedAt.UtcDateTime.ToString("HH:mm", CultureInfo.InvariantCulture)})"));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem("Quit CuotaX"));
         foreach (ToolStripItem item in menu.Items)
@@ -111,11 +112,16 @@ internal static class ScreenshotRenderer
             TrayIconRenderer.ForQuota(Fixture, Now, weeklyOnly: true),
             TrayIconRenderer.ForQuota(ClaudeFixture, Now, weeklyOnly: true),
         };
-        using var icon = TrayIconRenderer.Render(visuals, 32, updateAvailable: false);
-        graphics.DrawImage(icon, new Rectangle(616, 490, 32, 32));
+        using var icon = TrayIconRenderer.Create(visuals);
+        graphics.DrawIconUnstretched(icon, new Rectangle(
+            616 + (32 - icon.Width) / 2,
+            490 + (32 - icon.Height) / 2,
+            icon.Width,
+            icon.Height
+        ));
         using var clockFont = new Font("Segoe UI", 12, FontStyle.Regular, GraphicsUnit.Pixel);
-        graphics.DrawString("12:23 PM", clockFont, white, 657, 489);
-        graphics.DrawString("8/28/2026", clockFont, white, 657, 506);
+        graphics.DrawString(Now.UtcDateTime.ToString("h:mm tt", CultureInfo.InvariantCulture), clockFont, white, 657, 489);
+        graphics.DrawString(Now.UtcDateTime.ToString("M/d/yyyy", CultureInfo.InvariantCulture), clockFont, white, 657, 506);
     }
 
     private static GraphicsPath RoundedRectangle(RectangleF bounds, float radius)
