@@ -55,7 +55,17 @@ internal static class ScreenshotRenderer
             Height
         );
         using var cropped = image.Clone(bounds, image.PixelFormat);
-        cropped.Save(fullPath, ImageFormat.Png);
+        using var output = new Bitmap(Width, (int)Math.Round(cropped.Height * (double)Width / cropped.Width), image.PixelFormat);
+        using (var scaled = Graphics.FromImage(output))
+        {
+            scaled.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            scaled.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            using var attributes = new ImageAttributes();
+            attributes.SetWrapMode(WrapMode.TileFlipXY);
+            scaled.DrawImage(cropped, new Rectangle(Point.Empty, output.Size),
+                0, 0, cropped.Width, cropped.Height, GraphicsUnit.Pixel, attributes);
+        }
+        output.Save(fullPath, ImageFormat.Png);
     }
 
     private static Rectangle DrawMenu(Graphics graphics)
