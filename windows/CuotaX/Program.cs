@@ -11,6 +11,7 @@ internal static class Program
         if (screenshotIndex >= 0 && screenshotIndex + 1 < args.Length)
         {
             ApplicationConfiguration.Initialize();
+            Application.SetColorMode(SystemColorMode.System);
             ScreenshotRenderer.Save(args[screenshotIndex + 1]);
             return;
         }
@@ -28,6 +29,7 @@ internal static class Program
         }
 
         ApplicationConfiguration.Initialize();
+        Application.SetColorMode(SystemColorMode.System);
         using var context = new TrayApplicationContext(
             registerStartup: !args.Contains("--no-register", StringComparer.Ordinal)
         );

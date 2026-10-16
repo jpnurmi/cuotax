@@ -15,7 +15,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly CodexClient _client = new();
     private readonly ClaudeClient _claudeClient = new();
     private readonly UpdateChecker _updateChecker = new();
-    private readonly ContextMenuStrip _menu = new();
+    private readonly TrayMenu _menu = new();
     private readonly NotifyIcon _notifyIcon = new();
     private readonly Form _menuOwner = new()
     {
