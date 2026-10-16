@@ -79,7 +79,7 @@ internal static class ScreenshotRenderer
         menu.DrawToBitmap(image, new Rectangle(Point.Empty, menu.Size));
 
         var bounds = new Rectangle(165, 35, menu.Width, menu.Height);
-        var radius = menu.LogicalToDeviceUnits(4);
+        const int radius = 10;
         using (var shadowPath = RoundedRectangle(
             new RectangleF(bounds.X + 4, bounds.Y + 5, bounds.Width, bounds.Height),
             radius
@@ -89,11 +89,10 @@ internal static class ScreenshotRenderer
             graphics.FillPath(shadow, shadowPath);
         }
         using (var path = RoundedRectangle(bounds, radius))
+        using (var texture = new TextureBrush(image, WrapMode.Clamp))
         {
-            var state = graphics.Save();
-            graphics.SetClip(path);
-            graphics.DrawImageUnscaled(image, bounds.Location);
-            graphics.Restore(state);
+            texture.TranslateTransform(bounds.X, bounds.Y);
+            graphics.FillPath(texture, path);
         }
     }
 
