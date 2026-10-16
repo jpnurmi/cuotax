@@ -43,15 +43,22 @@ internal static class ScreenshotRenderer
             graphics.FillEllipse(glow, -80, 30, 520, 520);
         }
 
-        DrawMenu(graphics);
+        var menuBounds = DrawMenu(graphics);
         DrawTaskbar(graphics);
 
         var fullPath = Path.GetFullPath(path);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-        image.Save(fullPath, ImageFormat.Png);
+        var bounds = Rectangle.FromLTRB(
+            Math.Max(0, menuBounds.Left - 16),
+            Math.Max(0, menuBounds.Top - 16),
+            Width,
+            Height
+        );
+        using var cropped = image.Clone(bounds, image.PixelFormat);
+        cropped.Save(fullPath, ImageFormat.Png);
     }
 
-    private static void DrawMenu(Graphics graphics)
+    private static Rectangle DrawMenu(Graphics graphics)
     {
         using var menu = new TrayMenu();
         menu.Items.Add(new ToolStripMenuItem("Codex") { Checked = true });
@@ -69,7 +76,7 @@ internal static class ScreenshotRenderer
         using var image = new Bitmap(menu.Width, menu.Height, PixelFormat.Format32bppArgb);
         menu.DrawToBitmap(image, new Rectangle(Point.Empty, menu.Size));
 
-        var bounds = new RectangleF(700 - menu.Width, 469 - menu.Height, menu.Width, menu.Height);
+        var bounds = new Rectangle(700 - menu.Width, 469 - menu.Height, menu.Width, menu.Height);
         var radius = menu.LogicalToDeviceUnits(4);
         using (var shadowPath = RoundedRectangle(
             new RectangleF(bounds.X + 4, bounds.Y + 5, bounds.Width, bounds.Height),
@@ -86,6 +93,7 @@ internal static class ScreenshotRenderer
             graphics.DrawImageUnscaled(image, (int)bounds.X, (int)bounds.Y);
             graphics.Restore(state);
         }
+        return bounds;
     }
 
     private static void DrawTaskbar(Graphics graphics)
