@@ -43,32 +43,15 @@ internal static class ScreenshotRenderer
             graphics.FillEllipse(glow, -80, 30, 520, 520);
         }
 
-        var menuBounds = DrawMenu(graphics);
+        DrawMenu(graphics);
         DrawTaskbar(graphics);
 
         var fullPath = Path.GetFullPath(path);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-        var bounds = Rectangle.FromLTRB(
-            Math.Max(0, menuBounds.Left - 16),
-            Math.Max(0, menuBounds.Top - 16),
-            Width,
-            Height
-        );
-        using var cropped = image.Clone(bounds, image.PixelFormat);
-        using var output = new Bitmap(Width, (int)Math.Round(cropped.Height * (double)Width / cropped.Width), image.PixelFormat);
-        using (var scaled = Graphics.FromImage(output))
-        {
-            scaled.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            scaled.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            using var attributes = new ImageAttributes();
-            attributes.SetWrapMode(WrapMode.TileFlipXY);
-            scaled.DrawImage(cropped, new Rectangle(Point.Empty, output.Size),
-                0, 0, cropped.Width, cropped.Height, GraphicsUnit.Pixel, attributes);
-        }
-        output.Save(fullPath, ImageFormat.Png);
+        image.Save(fullPath, ImageFormat.Png);
     }
 
-    private static Rectangle DrawMenu(Graphics graphics)
+    private static void DrawMenu(Graphics graphics)
     {
         using var menu = new TrayMenu();
         menu.Items.Add(new ToolStripMenuItem("Codex") { Checked = true });
@@ -86,8 +69,11 @@ internal static class ScreenshotRenderer
         using var image = new Bitmap(menu.Width, menu.Height, PixelFormat.Format32bppArgb);
         menu.DrawToBitmap(image, new Rectangle(Point.Empty, menu.Size));
 
-        var bounds = new Rectangle(700 - menu.Width, 469 - menu.Height, menu.Width, menu.Height);
-        var radius = menu.LogicalToDeviceUnits(4);
+        var scale = Math.Min(535f / menu.Width, 434f / menu.Height);
+        var width = (int)Math.Round(menu.Width * scale);
+        var height = (int)Math.Round(menu.Height * scale);
+        var bounds = new Rectangle(700 - width, 469 - height, width, height);
+        var radius = menu.LogicalToDeviceUnits(4) * scale;
         using (var shadowPath = RoundedRectangle(
             new RectangleF(bounds.X + 4, bounds.Y + 5, bounds.Width, bounds.Height),
             radius
@@ -100,10 +86,13 @@ internal static class ScreenshotRenderer
         {
             var state = graphics.Save();
             graphics.SetClip(path);
-            graphics.DrawImageUnscaled(image, (int)bounds.X, (int)bounds.Y);
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            using var attributes = new ImageAttributes();
+            attributes.SetWrapMode(WrapMode.TileFlipXY);
+            graphics.DrawImage(image, bounds, 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, attributes);
             graphics.Restore(state);
         }
-        return bounds;
     }
 
     private static void DrawTaskbar(Graphics graphics)
@@ -121,13 +110,8 @@ internal static class ScreenshotRenderer
             TrayIconRenderer.ForQuota(Fixture, Now, weeklyOnly: true),
             TrayIconRenderer.ForQuota(ClaudeFixture, Now, weeklyOnly: true),
         };
-        using var icon = TrayIconRenderer.Create(visuals);
-        graphics.DrawIconUnstretched(icon, new Rectangle(
-            616 + (32 - icon.Width) / 2,
-            490 + (32 - icon.Height) / 2,
-            icon.Width,
-            icon.Height
-        ));
+        using var icon = TrayIconRenderer.Render(visuals, 32, updateAvailable: false);
+        graphics.DrawImage(icon, new Rectangle(616, 490, 32, 32));
         using var clockFont = new Font("Segoe UI", 12, FontStyle.Regular, GraphicsUnit.Pixel);
         graphics.DrawString("12:23 PM", clockFont, white, 657, 489);
         graphics.DrawString("8/28/2026", clockFont, white, 657, 506);
