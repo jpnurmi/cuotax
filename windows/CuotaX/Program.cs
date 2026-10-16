@@ -10,8 +10,10 @@ internal static class Program
         var screenshotIndex = Array.IndexOf(args, "--screenshot");
         if (screenshotIndex >= 0 && screenshotIndex + 1 < args.Length)
         {
-            ApplicationConfiguration.Initialize();
-            Application.SetColorMode(SystemColorMode.System);
+            Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.SetColorMode(SystemColorMode.Dark);
             ScreenshotRenderer.Save(args[screenshotIndex + 1]);
             return;
         }

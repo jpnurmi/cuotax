@@ -2,6 +2,7 @@
 
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Globalization;
 
 namespace CuotaX;
 
@@ -53,61 +54,47 @@ internal static class ScreenshotRenderer
 
     private static void DrawMenu(Graphics graphics)
     {
-        var bounds = new RectangleF(165, 35, 535, 434);
+        using var font = new Font("Segoe UI", 16, FontStyle.Regular, GraphicsUnit.Pixel);
+        using var menu = new TrayMenu { Font = font };
+        menu.Items.Add(new ToolStripMenuItem("Codex") { Checked = true });
+        menu.AddWindow("5-hour", Fixture.FiveHour, fiveHour: true, Now);
+        menu.AddWindow("Weekly", Fixture.Weekly, fiveHour: false, Now);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem("Claude") { Checked = true });
+        menu.AddWindow("5-hour", ClaudeFixture.FiveHour, fiveHour: true, Now);
+        menu.AddWindow("Weekly", ClaudeFixture.Weekly, fiveHour: false, Now);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem($"Refresh ({Fixture.UpdatedAt.UtcDateTime.ToString("HH:mm", CultureInfo.InvariantCulture)})"));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem("Quit CuotaX"));
+        foreach (ToolStripItem item in menu.Items)
+        {
+            if (item is ToolStripMenuItem)
+            {
+                item.Padding = new Padding(0, 13, 0, 13);
+            }
+        }
+        menu.AutoSize = false;
+        menu.Size = new Size(535, 434);
+        using var image = new Bitmap(menu.Width, menu.Height, PixelFormat.Format32bppArgb);
+        menu.DrawToBitmap(image, new Rectangle(Point.Empty, menu.Size));
+
+        var bounds = new Rectangle(165, 35, menu.Width, menu.Height);
+        const int radius = 10;
         using (var shadowPath = RoundedRectangle(
             new RectangleF(bounds.X + 4, bounds.Y + 5, bounds.Width, bounds.Height),
-            10
+            radius
         ))
         using (var shadow = new SolidBrush(Color.FromArgb(72, 0, 0, 0)))
         {
             graphics.FillPath(shadow, shadowPath);
         }
-        using (var path = RoundedRectangle(bounds, 10))
-        using (var menu = new SolidBrush(Color.FromArgb(246, 246, 246)))
-        using (var border = new Pen(Color.FromArgb(180, 186, 190), 1))
+        using (var path = RoundedRectangle(bounds, radius))
+        using (var texture = new TextureBrush(image, WrapMode.Clamp))
         {
-            graphics.FillPath(menu, path);
-            graphics.DrawPath(border, path);
+            texture.TranslateTransform(bounds.X, bounds.Y);
+            graphics.FillPath(texture, path);
         }
-
-        DrawText(graphics, "✓  Codex", 190, 57, Color.FromArgb(30, 30, 30));
-        DrawWindow(graphics, "5-hour", Fixture.FiveHour!, true, 94);
-        DrawWindow(graphics, "Weekly", Fixture.Weekly!, false, 136);
-        Separator(graphics, 176);
-        DrawText(graphics, "✓  Claude", 190, 199, Color.FromArgb(30, 30, 30));
-        DrawWindow(graphics, "5-hour", ClaudeFixture.FiveHour!, true, 233);
-        DrawWindow(graphics, "Weekly", ClaudeFixture.Weekly!, false, 275);
-        Separator(graphics, 317);
-        DrawText(graphics, $"Refresh ({QuotaFormatting.Time(Fixture.UpdatedAt)})", 190, 345, Color.FromArgb(30, 30, 30));
-        Separator(graphics, 385);
-        DrawText(graphics, "Quit CuotaX", 190, 407, Color.FromArgb(30, 30, 30));
-    }
-
-    private static void DrawWindow(
-        Graphics graphics,
-        string label,
-        QuotaWindow window,
-        bool fiveHour,
-        float y
-    )
-    {
-        var status = Quota.StatusFor(
-            window,
-            fiveHour ? "5-hour" : "weekly",
-            fiveHour ? QuotaFormatting.FiveHourMinutes : QuotaFormatting.WeeklyMinutes,
-            Now
-        );
-        var pace = QuotaFormatting.Color(status) ?? new PaceColor(113, 113, 122);
-        using (var dot = new SolidBrush(Color.FromArgb(pace.Red, pace.Green, pace.Blue)))
-        {
-            graphics.FillEllipse(dot, 190, y + 6, 8, 8);
-        }
-
-        var comparison = window.UsedPercent <= status.OnTrackPercent ? "≤" : ">";
-        var reset = QuotaFormatting.Reset(window.ResetsAt, Now, includeDate: !fiveHour);
-        var title =
-            $"{label}  {QuotaFormatting.Percent(window.UsedPercent)} ({comparison}{QuotaFormatting.Percent(status.OnTrackPercent)}) · {reset}";
-        DrawText(graphics, title, 213, y, Color.FromArgb(30, 30, 30));
     }
 
     private static void DrawTaskbar(Graphics graphics)
@@ -125,24 +112,16 @@ internal static class ScreenshotRenderer
             TrayIconRenderer.ForQuota(Fixture, Now, weeklyOnly: true),
             TrayIconRenderer.ForQuota(ClaudeFixture, Now, weeklyOnly: true),
         };
-        using var icon = TrayIconRenderer.Render(visuals, 32, updateAvailable: false);
-        graphics.DrawImage(icon, new Rectangle(616, 490, 32, 32));
+        using var icon = TrayIconRenderer.Create(visuals);
+        graphics.DrawIconUnstretched(icon, new Rectangle(
+            616 + (32 - icon.Width) / 2,
+            490 + (32 - icon.Height) / 2,
+            icon.Width,
+            icon.Height
+        ));
         using var clockFont = new Font("Segoe UI", 12, FontStyle.Regular, GraphicsUnit.Pixel);
-        graphics.DrawString("12:23 PM", clockFont, white, 657, 489);
-        graphics.DrawString("8/28/2026", clockFont, white, 657, 506);
-    }
-
-    private static void DrawText(Graphics graphics, string value, float x, float y, Color color)
-    {
-        using var font = new Font("Segoe UI", 16, FontStyle.Regular, GraphicsUnit.Pixel);
-        using var brush = new SolidBrush(color);
-        graphics.DrawString(value, font, brush, x, y);
-    }
-
-    private static void Separator(Graphics graphics, float y)
-    {
-        using var pen = new Pen(Color.FromArgb(214, 214, 214), 1);
-        graphics.DrawLine(pen, 180, y, 685, y);
+        graphics.DrawString(Now.UtcDateTime.ToString("h:mm tt", CultureInfo.InvariantCulture), clockFont, white, 657, 489);
+        graphics.DrawString(Now.UtcDateTime.ToString("M/d/yyyy", CultureInfo.InvariantCulture), clockFont, white, 657, 506);
     }
 
     private static GraphicsPath RoundedRectangle(RectangleF bounds, float radius)

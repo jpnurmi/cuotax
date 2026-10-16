@@ -376,11 +376,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
             }
             if (state.Quota is { } quota)
             {
-                AddWindow("5-hour", quota.FiveHour, fiveHour: true);
-                AddWindow("Weekly", quota.Weekly, fiveHour: false);
+                _menu.AddWindow("5-hour", quota.FiveHour, fiveHour: true);
+                _menu.AddWindow("Weekly", quota.Weekly, fiveHour: false);
                 if (quota.Fable is { } fable)
                 {
-                    AddWindow("Fable weekly", fable, fiveHour: false);
+                    _menu.AddWindow("Fable weekly", fable, fiveHour: false);
                 }
                 if (state.Error is { } error)
                 {
@@ -417,27 +417,6 @@ internal sealed class TrayApplicationContext : ApplicationContext
         var quit = new ToolStripMenuItem("Quit CuotaX");
         quit.Click += (_, _) => ExitThread();
         _menu.Items.Add(quit);
-    }
-
-    private void AddWindow(string label, QuotaWindow? window, bool fiveHour)
-    {
-        if (window is null)
-        {
-            AddInfo($"{label}  —");
-            return;
-        }
-
-        var status = Quota.StatusFor(
-            window,
-            fiveHour ? "5-hour" : "weekly",
-            fiveHour ? QuotaFormatting.FiveHourMinutes : QuotaFormatting.WeeklyMinutes
-        );
-        var reference = status.OnTrackPercent is null
-            ? string.Empty
-            : $" ({(status.Level == QuotaLevel.Normal ? "≤" : ">")}{QuotaFormatting.Percent(status.OnTrackPercent)})";
-        AddInfo(
-            $"{label}  {QuotaFormatting.Percent(window.UsedPercent)}{reference} · {QuotaFormatting.Reset(window.ResetsAt, includeDate: !fiveHour)}"
-        );
     }
 
     private void AddInfo(string text)
